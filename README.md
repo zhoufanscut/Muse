@@ -2,10 +2,6 @@
 
 Muse is a static, no-build-step web app that lets visitors live-preview any coding font, VSCode theme, and programming language combination in real time. Fonts load from CDN (no local install required), themes render through Shiki, and languages come with idiomatic sample programs. Selection state is shareable via URL hash. Everything is plain HTML, ES modules, and JSON — no bundler, no transpiler, no `npm install`.
 
-The full architecture is documented in [PLAN.md](./PLAN.md). This file covers how to contribute.
-
----
-
 ## Add a font (1 file)
 
 Drop a JSON file at `data/fonts/<id>.json`:
