@@ -5,6 +5,9 @@ let mountState = null;
 
 function createFontPill(font) {
   if (!mountState || mountState.entryMap.has(font.id)) return;
+  if (!mountState.allFonts.some(f => f.id === font.id)) {
+    mountState.allFonts.push(font);
+  }
 
   const li = document.createElement('li');
   li.className = 'pill';
@@ -56,10 +59,11 @@ function createFontPill(font) {
   li.append(topRow, preview);
   mountState.ul.appendChild(li);
   mountState.entryMap.set(font.id, { li, statusBadge });
-  mountState.observer.observe(li);
+  if (mountState.ul.isConnected) mountState.observer.observe(li);
 
   const handleSelect = async () => {
     setState({ font: font.id });
+
     if (!isInstalled) {
       statusBadge.style.display = 'inline-block';
       statusBadge.className = 'spinner';
@@ -128,12 +132,10 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
   mountState = { ul, entryMap, container, observer, allFonts };
 
+  container.appendChild(ul);
+
   for (const font of allFonts) {
     createFontPill(font);
-  }
-
-  for (const li of ul.children) {
-    observer.observe(li);
   }
 
   const addBtn = document.createElement('button');
@@ -144,7 +146,6 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   addBtn.style.width = '100%';
   addBtn.style.justifyContent = 'center';
 
-  container.appendChild(ul);
   container.appendChild(addBtn);
 
   subscribe((state) => {

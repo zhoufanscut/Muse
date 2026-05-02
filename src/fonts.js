@@ -10,26 +10,80 @@ const LOCAL_FONTS = [
   { id: 'pt-mono', name: 'PT Mono', stack: "'PT Mono', monospace" },
 ];
 
-// Font-ready signal: document.fonts.load, NOT the stylesheet <link> load event.
-// link.load fires when CSS arrives; document.fonts.load waits for the font to be decoded.
-export async function loadWebFont(font) {
-  if (font.cssUrl) {
-    const existing = document.querySelector(
-      `link[rel="stylesheet"][href="${font.cssUrl}"]`
-    );
-    if (!existing) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = font.cssUrl;
-      document.head.appendChild(link);
+const stylesheetPromises = new Map();
+const fontPromises = new Map();
+
+function findStylesheet(cssUrl) {
+  return Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .find(link => link.getAttribute('href') === cssUrl || link.href === cssUrl);
+}
+
+function ensureStylesheet(cssUrl) {
+  if (!cssUrl) return Promise.resolve(true);
+  if (stylesheetPromises.has(cssUrl)) return stylesheetPromises.get(cssUrl);
+
+  let link = findStylesheet(cssUrl);
+  const promise = new Promise((resolve) => {
+    const markReady = () => {
+      link.dataset.museFontStylesheetReady = 'true';
+      resolve(true);
+    };
+    const markFailed = () => {
+      stylesheetPromises.delete(cssUrl);
+      resolve(false);
+    };
+
+    if (link?.dataset.museFontStylesheetReady === 'true' || link?.sheet) {
+      markReady();
+      return;
     }
-  }
-  try {
+
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = cssUrl;
+    }
+
+    link.addEventListener('load', markReady, { once: true });
+    link.addEventListener('error', markFailed, { once: true });
+
+    if (!link.isConnected) document.head.appendChild(link);
+  });
+
+  stylesheetPromises.set(cssUrl, promise);
+  return promise;
+}
+
+// Font loading requires TWO waits when injecting a new stylesheet:
+// 1. Wait for the CSS <link> to load — @font-face must be registered before
+//    document.fonts.load() can find and wait for the font.
+// 2. Then wait for the font file itself to be decoded. The second wait is the
+//    important readiness signal; link load only means the @font-face CSS arrived.
+export async function loadWebFont(font) {
+  if (!font?.name) return false;
+
+  const key = `${font.cssUrl || 'local'}::${font.name}`;
+  if (fontPromises.has(key)) return fontPromises.get(key);
+
+  const promise = (async () => {
+    if (font.cssUrl) {
+      const cssReady = await ensureStylesheet(font.cssUrl);
+      if (!cssReady) {
+        fontPromises.delete(key);
+        return false;
+      }
+    }
+
+    // document.fonts.load waits for the actual decoded font, unlike <link> load.
     await document.fonts.load(`16px "${font.name}"`);
     return true;
-  } catch {
+  })().catch(() => {
+    fontPromises.delete(key);
     return false;
-  }
+  });
+
+  fontPromises.set(key, promise);
+  return promise;
 }
 
 // Canvas trick: compare 16px serif baseline against 16px <candidate>, serif.

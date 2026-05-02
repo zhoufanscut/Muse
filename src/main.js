@@ -2,7 +2,7 @@
 
 import { getState, subscribe, setCatalog } from './state.js';
 import { getHighlighter } from './themes.js';
-import { loadFontManifests, detectInstalledFonts, loadWebFont } from './fonts.js';
+import { loadFontManifests, detectInstalledFonts } from './fonts.js';
 import { loadLanguageManifests } from './languages.js';
 import { renderPreview } from './preview.js';
 import { mountFontsSidebar, addCustomFontPill } from './ui/sidebar-fonts.js';
@@ -21,6 +21,14 @@ try {
   ]);
 
   const installedFonts = detectInstalledFonts();
+  const allFonts = [...fontManifests, ...installedFonts];
+
+  function rememberFont(font) {
+    if (font && !allFonts.some(f => f.id === font.id)) {
+      allFonts.push(font);
+    }
+    return font;
+  }
 
   const builtinThemeIds = await fetch('./data/themes/_builtin.json').then(r => r.json());
   const builtinThemes = new Set(builtinThemeIds);
@@ -72,12 +80,12 @@ try {
   mountUploaders({
     addFontBtn: document.getElementById('add-font-btn'),
     addThemeBtn,
-    onFontAdded: (font) => { addCustomFontPill(font); },
+    onFontAdded: (font) => { addCustomFontPill(rememberFont(font)); },
     onThemeAdded: ({ id }) => { addCustomThemePill(id); },
   });
 
   await restoreCustom({
-    onFontAdded: (font) => { addCustomFontPill(font); },
+    onFontAdded: (font) => { addCustomFontPill(rememberFont(font)); },
     onThemeAdded: ({ id }) => { addCustomThemePill(id); },
   });
 
@@ -88,8 +96,7 @@ try {
 
   function currentFontManifest() {
     const state = getState();
-    const all = [...fontManifests, ...installedFonts];
-    return all.find(f => f.id === state.font) || all[0];
+    return allFonts.find(f => f.id === state.font) || allFonts[0];
   }
 
   let booted = false;
@@ -116,9 +123,6 @@ try {
       if (overlay) overlay.remove();
     }
   });
-
-  const initFont = currentFontManifest();
-  await loadWebFont(initFont);
 } catch (e) {
   console.error(e);
   const overlay = document.getElementById('boot-overlay');

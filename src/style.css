@@ -59,7 +59,8 @@ body {
 }
 
 .preview-pane { font-feature-settings: "liga", "calt"; }
-.preview-pane.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
+.preview-pane.no-liga,
+.disambig.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
 .preview-pane.italic-comments .shiki .comment,
 .preview-pane.italic-comments .shiki [style*="font-style:italic"] {
   font-style: italic !important;

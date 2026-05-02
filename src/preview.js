@@ -5,12 +5,20 @@
 // renderPreview. This avoids redundant highlight tokenization for a pure-CSS change.
 
 import { highlight, ensureLang, ensureCustomTheme } from './themes.js';
+import { loadWebFont } from './fonts.js';
 import { loadSample } from './languages.js';
 
 let renderToken = 0;
 
 export async function renderPreview({ font, theme, lang, langManifest, size, ligatures, italic, container, builtinThemes }) {
   const token = ++renderToken;
+
+  applyFontStyles({ container, font, size, ligatures, italic });
+
+  // Do not block the visible font switch on CDN font loading. Applying the
+  // font-family stack immediately lets installed fonts update instantly and lets
+  // browsers show fallback text until a web font finishes decoding.
+  const fontReady = loadWebFont(font);
 
   // Load custom theme if needed (built-in themes are already in Shiki at bootstrap)
   if (builtinThemes && !builtinThemes.has(theme)) {
@@ -40,10 +48,41 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   if (token !== renderToken) return;
 
   container.innerHTML = html;
-  container.style.fontFamily = font.stack;
-  container.style.fontSize = size + 'px';
+  applyFontStyles({ container, font, size, ligatures, italic });
+
+  fontReady.then(() => {
+    if (token !== renderToken) return;
+    applyFontStyles({ container, font, size, ligatures, italic });
+  });
+}
+
+function applyFontStyles({ container, font, size, ligatures, italic }) {
+  if (!container || !font) return;
+
+  const targets = [
+    container,
+    container.querySelector('.shiki'),
+    container.querySelector('.shiki code'),
+    container.querySelector('pre'),
+    container.querySelector('code'),
+  ].filter(Boolean);
+
+  for (const target of targets) {
+    target.style.fontFamily = font.stack;
+    target.style.fontSize = size + 'px';
+  }
+
   container.classList.toggle('no-liga', !ligatures);
   container.classList.toggle('italic-comments', italic);
+
+  const disambig = container.nextElementSibling?.classList.contains('disambig')
+    ? container.nextElementSibling
+    : null;
+  if (disambig) {
+    disambig.style.fontFamily = font.stack;
+    disambig.style.fontSize = size + 'px';
+    disambig.classList.toggle('no-liga', !ligatures);
+  }
 }
 
 function escapeHtml(s) {
