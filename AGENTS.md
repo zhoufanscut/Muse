@@ -1,0 +1,136 @@
+# AGENTS.md
+
+## Project type
+
+Muse is a **static, no-build-step web app** — plain HTML + vanilla ES modules + JSON data files. No `package.json`, no bundler, no transpiler, no test harness, no linter. Dependencies (Shiki) load at runtime from `esm.sh` CDN. Deployed as **GitHub Pages** from the repo root on `main`.
+
+## Architecture
+
+```
+index.html  →  src/main.js (boot orchestrator)
+                  ├── state.js       — pub/sub store, localStorage + URL hash sync
+                  ├── themes.js      — Shiki highlighter (@1.24.0, esm.sh)
+                  ├── fonts.js       — CDN font loading, installed-font detection
+                  ├── languages.js   — manifest + sample loading, caching
+                  ├── preview.js     — render with race-condition guard
+                  ├── style.css      — all styles
+                  └── ui/
+                      ├── sidebar-fonts.js   — left sidebar pills
+                      ├── sidebar-themes.js  — right sidebar pills
+                      ├── controls.js        — size slider, ligatures, lang tabs
+                      └── uploaders.js       — custom font/theme upload dialogs
+
+data/
+  ├── _index.json          — auto-generated catalog (CI, never edit manually)
+  ├── fonts/<id>.json      — font manifests
+  ├── themes/<id>.json     — VSCode theme JSONs
+  ├── themes/_builtin.json — Shiki built-in theme names
+  ├── languages/<id>.json  — language manifests
+  └── samples/<id>.txt     — sample code files
+```
+
+All imports use relative paths with `./` prefix. All `fetch()` calls use `./` prefix (required for GitHub Pages project sites).
+
+## Local dev
+
+```bash
+python3 -m http.server 8000        # serve on localhost:8000
+node scripts/rebuild-index.mjs     # regenerate data/_index.json after data changes
+node scripts/rebuild-index.mjs --check   # validate-only (no write)
+```
+
+Node.js 18+ required. The rebuild script uses only `node:fs`, zero dependencies.
+
+**Do NOT test with `file://`.** Browsers block `fetch()` for ES modules and data on file protocol.
+
+## Data contribution rules
+
+Adding content is conflict-free by design — you never edit shared files:
+
+| Asset | Files needed | Where |
+|-------|-------------|-------|
+| Font | 1 file | `data/fonts/<id>.json` |
+| Theme | 1 file | `data/themes/<id>.json` |
+| Language | 2 files | `data/languages/<id>.json` + `data/samples/<id>.txt` |
+
+**Filename stem = canonical id** — used in URL hash, localStorage, and Shiki theme registration. The `id` field inside the JSON **must** match the filename.
+
+## Critical invariants
+
+These were learned through multiple bug-fix rounds. Violating any of them causes silent breakage.
+
+### Theme name override
+```js
+// ALWAYS do this before passing a custom theme to Shiki:
+const theme = { ...raw, name: id };
+```
+The filename stem is canonical. The theme's embedded `name` field is display-only and **may differ**. If you pass the raw `name` to Shiki, URL sharing breaks because localStorage stores the filename-stem id.
+
+### Font loading
+```js
+// Use this — waits for font decoding:
+await document.fonts.load(`16px "${font.name}"`);
+
+// NOT this — fires when CSS arrives, not when font is ready:
+link.addEventListener('load', ...);
+```
+
+### State precedence
+```
+URL hash > localStorage > hardcoded defaults
+```
+On page load, hash overrides everything. When state changes, **both** `localStorage` and URL hash update simultaneously.
+
+### `.nojekyll`
+The root `.nojekyll` file (empty) is **required** for GitHub Pages. Without it, Jekyll drops files starting with `_` (like `_index.json` and `_builtin.json`), and the app fails to boot.
+
+### `data/_index.json` is auto-generated
+Never edit it manually. CI regenerates it on push to `main`. The rebuild script reads the filesystem and writes it. Manual edits will be clobbered.
+
+### Index must exist at boot time
+`src/main.js` fetches `data/_index.json` on app load. If this file is missing or invalid, the entire app fails with "Failed to start". When adding new assets, run `node scripts/rebuild-index.mjs` before testing.
+
+### Runtime assets (localStorage) vs repo assets
+Fonts/themes uploaded at runtime via the UI dialogs persist in `localStorage` **only**. They are NOT backed by repo JSON files. A shared URL referencing a runtime-only asset falls back to defaults on a different device. When the `setCatalog()` is called, runtime asset IDs must be included in the catalog BEFORE validation runs — otherwise state pointing to runtime assets gets clobbered to defaults on reload.
+
+### Shiki version
+Pinned to `https://esm.sh/shiki@1.24.0` in `src/themes.js`. Changing this requires verifying that all custom theme loading still works, the theme API hasn't changed, and all `shikiLang` values in language manifests are still valid.
+
+## CI
+
+Single workflow: `.github/workflows/rebuild-index.yml`
+
+- **On PR**: runs `node scripts/rebuild-index.mjs --check` (validation-only)
+- **On push to `main`**: validates + regenerates `data/_index.json` + auto-commits it
+
+The auto-commit triggers a GitHub Pages deploy. No manual deploy step.
+
+## What doesn't exist
+
+- No tests (no jest, vitest, pytest, etc.)
+- No linter (no eslint, prettier, biome)
+- No type checker (no TS config)
+- No pre-commit hooks
+- No Docker/container setup
+- No environment variables (purely static frontend)
+
+Manual verification: start the HTTP server, open the browser, check the console for errors.
+
+## State management pattern
+
+Import `state.js` — it's a single pub/sub store:
+
+```js
+import { getState, setState, subscribe } from './state.js';
+
+// Read (returns a copy, don't mutate)
+const { font, theme, lang, size, ligatures, italic } = getState();
+
+// Write (triggers all subscribers, updates localStorage + URL hash)
+setState({ theme: 'dracula' });
+
+// Subscribe (fires immediately, then on every change)
+const unsub = subscribe((state) => { /* render */ });
+```
+
+Before `setCatalog()` is called during boot, `setState` does NOT validate against available assets. After boot, invalid font/theme/lang IDs trigger `console.error` and fall back to defaults.
