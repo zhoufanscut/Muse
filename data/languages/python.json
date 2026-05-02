@@ -1,0 +1,8 @@
+{
+  "id": "python",
+  "label": "Python",
+  "shikiLang": "python",
+  "sample": "data/samples/python.txt",
+  "summary": "Async ETL pipeline with dataclasses, decorators, and context managers.",
+  "exercises": ["dataclass", "decorators", "async/await", "context manager", "type hints", "f-string"]
+}

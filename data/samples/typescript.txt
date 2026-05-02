@@ -1,0 +1,91 @@
+/**
+ * eventbus.ts -- Typed event bus with TTL-based caching and
+ * generic subscriber support.  Features: generic types,
+ * interfaces, async/await, Map/Set, type guards, template
+ * literals.
+ */
+
+interface EventPayload<T> {
+  id: string;
+  timestamp: number; /* numeric literal */
+  data: T;
+}
+
+type Subscriber<T> = (payload: EventPayload<T>) => Promise<void> | void;
+
+function isEventPayload<T>(value: unknown): value is EventPayload<T> {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.id === "string" && typeof v.timestamp === "number";
+}
+
+class TtlCache<K, V> {
+  private store = new Map<K, { value: V; expiresAt: number }>();
+  constructor(private ttlMs: number = 60_000) {}
+
+  set(key: K, value: V): void {
+    const expiresAt = Date.now() + this.ttlMs;
+    this.store.set(key, { value, expiresAt });
+  }
+
+  get(key: K): V | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return;
+    if (Date.now() > entry.expiresAt) { this.store.delete(key); return; }
+    return entry.value;
+  }
+
+  has(key: K): boolean { return this.get(key) !== undefined; }
+  get size(): number { return this.store.size; }
+}
+
+class EventBus<EventMap extends Record<string, unknown>> {
+  private subscribers = new Map<keyof EventMap, Set<Subscriber<any>>>();
+  private cache = new TtlCache<string, EventPayload<unknown>>(30_000);
+
+  on<K extends keyof EventMap>(event: K, fn: Subscriber<EventMap[K]>): void {
+    if (!this.subscribers.has(event)) {
+      this.subscribers.set(event, new Set());
+    }
+    // definite assignment assertion
+    this.subscribers.get(event)!.add(fn);
+  }
+
+  off<K extends keyof EventMap>(event: K, fn: Subscriber<EventMap[K]>): void {
+    this.subscribers.get(event)?.delete(fn);
+  }
+
+  async emit<K extends keyof EventMap>(event: K, data: EventMap[K]): Promise<void> {
+    const payload: EventPayload<EventMap[K]> = {
+      id: `${String(event)}_${Date.now()}`,  // template literal
+      timestamp: Date.now(),
+      data,
+    };
+    /* block comment: cache last payload */
+    this.cache.set(`last:${String(event)}`, payload as EventPayload<unknown>);
+
+    const fns = this.subscribers.get(event);
+    if (!fns) return;
+    const promises: Promise<void>[] = [];
+    for (const fn of fns) {
+      const result = fn(payload);
+      if (result instanceof Promise) promises.push(result);
+    }
+    await Promise.all(promises);
+  }
+
+  last<K extends keyof EventMap>(event: K): EventPayload<EventMap[K]> | undefined {
+    const cached = this.cache.get(`last:${String(event)}`);
+    if (isEventPayload<EventMap[K]>(cached)) return cached;
+    return;
+  }
+}
+
+interface AppEvents {
+  userLogin: { userId: string; name: string };
+  pageView: { path: string; referrer: string };
+}
+
+const bus = new EventBus<AppEvents>();
+bus.on("userLogin", async (p) => { console.log(`Login: ${p.data.name}`); });
+bus.on("pageView", (p) => { console.log("Page: " + p.data.path); });

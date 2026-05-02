@@ -1,0 +1,8 @@
+{
+  "id": "rust",
+  "label": "Rust",
+  "shikiLang": "rust",
+  "sample": "data/samples/rust.txt",
+  "summary": "Small parser with traits, lifetimes, and Result-based error handling.",
+  "exercises": ["use", "struct", "impl", "trait", "generics with bounds", "lifetimes <'a>", "enum (Result/Option)", "match", "?-operator", "#[derive(...)]", "lambda/closure", "mod", "pub", "r\"...\" raw string"]
+}

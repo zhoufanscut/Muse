@@ -1,0 +1,100 @@
+// small_buffer.hpp -- A fixed-capacity ring buffer with RAII
+// cleanup, templated element type, and C++17/20 features.
+//
+// Features: #include, namespace, template<typename T>, class with
+// public/private, RAII destructor, auto, lambda, range-for,
+// std::optional, constexpr, std::unique_ptr, block comment.
+
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <vector>
+
+namespace muse::samples {
+
+/* ---------- Compile-time constants ---------- */
+
+constexpr size_t kDefaultCapacity = 64; // numeric literal
+constexpr int kMagicInit = 0xFE;
+
+/* ---------- Templated ring buffer ---------- */
+
+template <typename T>
+class RingBuffer {
+public:
+    explicit RingBuffer(size_t cap = kDefaultCapacity)
+        : cap_(cap), head_(0), tail_(0), full_(false) {
+        /*
+         * Block comment: allocate storage up front so we never
+         * reallocate during normal push/pop.
+         */
+        storage_ = std::make_unique<T[]>(cap_);
+    }
+
+    // RAII destructor -- nothing extra needed since unique_ptr
+    // handles cleanup, but we log for demonstration.
+    ~RingBuffer() {
+        std::cout << "~RingBuffer(" << cap_ << " slots)\n";
+    }
+
+    // No copy -- move only.
+    RingBuffer(RingBuffer&&) = default;
+    RingBuffer& operator=(RingBuffer&&) = default;
+
+    RingBuffer(RingBuffer const&) = delete;
+    RingBuffer& operator=(RingBuffer const&) = delete;
+
+    void push(T value) {
+        storage_[head_] = std::move(value);
+        head_ = (head_ + 1) % cap_;
+        if (full_) {
+            tail_ = (tail_ + 1) % cap_; // overwrite oldest
+        }
+        full_ = (head_ == tail_);
+    }
+
+    auto pop() -> std::optional<T> { // auto return type
+        if (empty()) {
+            return std::nullopt;
+        }
+        T value = std::move(storage_[tail_]);
+        tail_ = (tail_ + 1) % cap_;
+        full_ = false;
+        return value;
+    }
+
+    [[nodiscard]] bool empty() const { return !full_ && head_ == tail_; }
+    [[nodiscard]] bool full() const { return full_; }
+    [[nodiscard]] size_t capacity() const { return cap_; }
+
+private:
+    std::unique_ptr<T[]> storage_;
+    size_t cap_;
+    size_t head_;
+    size_t tail_;
+    bool full_;
+};
+
+/* ---------- Demo ---------- */
+
+void demo() {
+    RingBuffer<int> buf(8); // numeric literal
+
+    // Lambda + range-for style push
+    auto values = {1, 2, 3, 4, 5};
+    for (auto v : values) { // range-for
+        buf.push(v);
+    }
+
+    // Lambda for draining
+    auto drain = [](auto &b) {
+        while (auto val = b.pop()) {
+            std::cout << *val << "\n";
+        }
+    };
+    drain(buf);
+}
+
+} // namespace muse::samples

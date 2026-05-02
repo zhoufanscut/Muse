@@ -1,0 +1,8 @@
+{
+  "id": "roboto-mono",
+  "name": "Roboto Mono",
+  "stack": "'Roboto Mono', monospace",
+  "cssUrl": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap",
+  "weights": [400, 700],
+  "credits": "https://fonts.google.com/specimen/Roboto+Mono"
+}

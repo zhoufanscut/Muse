@@ -1,0 +1,8 @@
+{
+  "id": "source-code-pro",
+  "name": "Source Code Pro",
+  "stack": "'Source Code Pro', monospace",
+  "cssUrl": "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap",
+  "weights": [400, 700],
+  "credits": "https://github.com/adobe-fonts/source-code-pro"
+}

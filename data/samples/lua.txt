@@ -1,0 +1,95 @@
+--[[
+  gamestate.lua -- Turn-based game state using metatable OOP.
+  Features: local, function definition, setmetatable, __index,
+  table constructor, pairs/ipairs, string.format, multi-return,
+  vararg ...
+--]]
+
+local Entity = {}
+Entity.__index = Entity
+
+function Entity:new(name, hp, ...)
+  local extra = { ... }  -- vararg capture
+  local t = {
+    name = name,
+    hp = hp or 10,
+    max_hp = hp,
+    alive = true,
+    tags = extra,
+  }
+  setmetatable(t, Entity)
+  return t
+end
+
+function Entity:take_damage(amount)
+  self.hp = self.hp - amount
+  if self.hp <= 0 then
+    self.hp = 0
+    self.alive = false
+  end
+end
+
+function Entity:heal(amount)
+  if not self.alive then return end
+  self.hp = math.min(self.hp + amount, self.max_hp)
+end
+
+local Game = {}
+Game.__index = Game
+
+function Game:new()
+  local t = {
+    turn = 1,
+    entities = {},
+  }
+  setmetatable(t, Game)
+  return t
+end
+
+-- Multi-return: alive count, dead count
+function Game:count_status()
+  local alive, dead = 0, 0
+  for _, e in pairs(self.entities) do
+    if e.alive then alive = alive + 1 else dead = dead + 1 end
+  end
+  return alive, dead
+end
+
+function Game:add_entities(...)
+  local list = { ... }
+  for i = 1, #list do
+    table.insert(self.entities, list[i])
+  end
+end
+
+function Game:report()
+  local a, d = self:count_status()
+  local out = string.format("Turn %d | Alive: %d | Dead: %d\n", self.turn, a, d)
+  for i, e in ipairs(self.entities) do
+    out = out .. string.format("  %s: %d/%d hp", e.name, e.hp, e.max_hp)
+    if not e.alive then
+      out = out .. ' [defeated]'
+    end
+    out = out .. "\n"
+  end
+  return out
+end
+
+function Game:tick()
+  self.turn = self.turn + 1
+  for _, e in pairs(self.entities) do
+    if e.alive then e:heal(1) end
+  end
+end
+
+local g = Game:new()
+g:add_entities(
+  Entity:new("Hero", 30),
+  Entity:new("Goblin", 12, "enemy"),
+  Entity:new("Dragon", 50, "boss")
+)
+
+g.entities[2]:take_damage(5)
+print(g:report())
+g:tick()
+print(g:report())

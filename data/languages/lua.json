@@ -1,0 +1,8 @@
+{
+  "id": "lua",
+  "label": "Lua",
+  "shikiLang": "lua",
+  "sample": "data/samples/lua.txt",
+  "summary": "Game state with OOP via metatables, iterators, and multi-return.",
+  "exercises": ["local", "function definition", "setmetatable", "__index", "table constructor", "for...in pairs/ipairs", "string.format", "multi-return", "vararg ...", "-- and --[[ block ]] comments"]
+}

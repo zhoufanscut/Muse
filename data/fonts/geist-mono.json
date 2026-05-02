@@ -1,0 +1,9 @@
+{
+  "id": "geist-mono",
+  "name": "Geist Mono",
+  "stack": "'Geist Mono', monospace",
+  "cssUrl": "https://cdn.jsdelivr.net/npm/@fontsource/geist-mono/index.css",
+  "ligatures": true,
+  "weights": [400, 700],
+  "credits": "https://vercel.com/font"
+}

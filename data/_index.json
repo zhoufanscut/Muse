@@ -1,0 +1,23 @@
+{
+  "fonts": [
+    "cascadia-code",
+    "fira-code",
+    "geist-mono",
+    "hack",
+    "ibm-plex-mono",
+    "inconsolata",
+    "iosevka",
+    "jetbrains-mono",
+    "roboto-mono",
+    "source-code-pro"
+  ],
+  "themes": [],
+  "languages": [
+    "cpp",
+    "go",
+    "lua",
+    "python",
+    "rust",
+    "typescript"
+  ]
+}

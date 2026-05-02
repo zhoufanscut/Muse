@@ -1,0 +1,9 @@
+{
+  "id": "iosevka",
+  "name": "Iosevka",
+  "stack": "Iosevka, monospace",
+  "cssUrl": "https://cdn.jsdelivr.net/npm/@fontsource/iosevka/index.css",
+  "ligatures": true,
+  "weights": [400, 700],
+  "credits": "https://github.com/be5invis/Iosevka"
+}

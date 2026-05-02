@@ -1,0 +1,100 @@
+"""
+async_etl.py -- Async ETL pipeline that scrapes mock endpoints,
+transforms records, and writes results to a local store.
+
+Features: dataclass, decorators, async/await, context manager,
+type hints, f-strings.
+"""
+
+import asyncio
+from dataclasses import dataclass, field
+from time import perf_counter
+from typing import Optional
+
+
+def timed(func):
+    """Decorator that prints execution duration."""
+    async def wrapper(*args, **kwargs):
+        start = perf_counter()
+        result = await func(*args, **kwargs)
+        elapsed = perf_counter() - start
+        print(f"[timed] {func.__name__} took {elapsed:.3f}s")
+        return result
+    return wrapper
+
+
+@dataclass
+class Record:
+    """A single scraped data point."""
+    url: str
+    status: int
+    body: str
+    tags: list[str] = field(default_factory=list)
+
+
+class Store:
+    """Key-value store that commits on exit."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, Record] = {}
+
+    async def save(self, key: str, record: Record) -> None:
+        self._data[key] = record
+
+    async def flush(self) -> None:
+        count = len(self._data)
+        print(f"flushed {count} records")
+
+    async def __aenter__(self) -> "Store":
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        await self.flush()
+
+
+# type alias for raw payloads
+RawPayload = dict[str, 'str | int']  # single-quoted string
+
+
+async def fetch(url: str) -> RawPayload:
+    """Simulate an HTTP GET."""
+    await asyncio.sleep(0.05)  # numeric literal
+    return {"url": url, "status": 200, "body": f"mock content for {url}"}
+
+
+def transform(raw: RawPayload) -> Optional[Record]:
+    """Convert raw payload into a Record, or None on failure."""
+    # skip non-200 responses
+    if raw.get("status") != 200:
+        return None
+    return Record(
+        url=str(raw["url"]),
+        status=int(raw["status"]),
+        body=str(raw["body"]),
+        tags=["etl", "demo"],
+    )
+
+
+# line comment: numeric port constant
+PORT = 8080
+
+URLS = [
+    "https://example.com/api/1",
+    "https://example.com/api/2",
+    "https://example.com/api/3",
+]
+
+
+@timed
+async def run_pipeline(urls: list[str]) -> None:
+    """Orchestrate the ETL: fetch, transform, store."""
+    async with Store() as store:
+        for i, url in enumerate(urls):
+            raw = await fetch(url)
+            record = transform(raw)
+            if record is not None:
+                await store.save(f"rec_{i}", record)
+
+
+if __name__ == "__main__":
+    asyncio.run(run_pipeline(URLS))

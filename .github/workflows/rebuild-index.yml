@@ -1,0 +1,43 @@
+name: Rebuild data index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/fonts/**'
+      - 'data/themes/**'
+      - 'data/languages/**'
+      - 'data/samples/**'
+      - 'scripts/rebuild-index.mjs'
+  pull_request:
+    paths:
+      - 'data/fonts/**'
+      - 'data/themes/**'
+      - 'data/languages/**'
+      - 'data/samples/**'
+      - 'scripts/rebuild-index.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Validate data files
+        run: node scripts/rebuild-index.mjs --check
+
+      - name: Regenerate index (push to main only)
+        if: github.event_name == 'push'
+        run: node scripts/rebuild-index.mjs
+
+      - name: Commit regenerated index (push to main only)
+        if: github.event_name == 'push'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: regenerate data/_index.json'
+          file_pattern: data/_index.json

@@ -1,0 +1,97 @@
+// smallserver.go -- Tiny HTTP service that greets users and
+// tracks request counts.  Features: struct with json tags,
+// interface, method receivers, goroutine + channel, defer,
+// if err != nil, switch, map/slice literals, raw backticks.
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+)
+
+/* Data model structs with json tags */
+
+type Greeting struct {
+	Message string `json:"message"`
+	Count   int    `json:"count"`
+}
+
+type Server struct {
+	mu     sync.Mutex
+	counts map[string]int
+	done   chan struct{}
+}
+
+type Handler interface {
+	Serve(w http.ResponseWriter, r *http.Request)
+	Shutdown()
+}
+
+func (s *Server) Serve(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.counts[r.URL.Path]++
+	n := s.counts[r.URL.Path]
+	s.mu.Unlock()
+
+	switch r.Method {
+	case http.MethodGet:
+		greeting := Greeting{
+			Message: fmt.Sprintf("hello, %s!", r.URL.Path),
+			Count:   n,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(greeting)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	default:
+		// raw backtick string literal
+		http.Error(w, `{"error":"method not allowed"}`, 405)
+	}
+}
+
+func (s *Server) Shutdown() {
+	close(s.done)
+}
+
+func (s *Server) reportLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.Lock()
+			// slice literal
+			paths := []string{}
+			for p := range s.counts {
+				paths = append(paths, p)
+			}
+			s.mu.Unlock()
+			log.Printf("active paths: %v", paths)
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func main() {
+	srv := &Server{
+		counts: make(map[string]int), // map literal
+		done:   make(chan struct{}),
+	}
+
+	go srv.reportLoop()
+
+	http.HandleFunc("/", srv.Serve)
+	addr := ":8080"
+	log.Printf("listening on %s", addr)
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		log.Fatalf("server: %v", err)
+	}
+}
