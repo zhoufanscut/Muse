@@ -38,7 +38,7 @@ function createThemePill(id, isCustom) {
   if (!mountState || mountState.pills.has(id)) return;
 
   const li = document.createElement('li');
-  li.className = 'pill';
+  li.className = 'pill pill-theme';
   li.setAttribute('role', 'option');
   li.setAttribute('tabindex', '0');
   li.dataset.id = id;
@@ -47,10 +47,13 @@ function createThemePill(id, isCustom) {
   nameSpan.textContent = id;
   li.appendChild(nameSpan);
 
+  const pillMeta = document.createElement('div');
+  pillMeta.className = 'pill-meta';
+
   const badge = document.createElement('span');
   badge.className = isCustom ? 'badge-installed' : 'badge-web';
   badge.textContent = '...';
-  li.appendChild(badge);
+  pillMeta.appendChild(badge);
 
   const swatchStrip = document.createElement('div');
   swatchStrip.className = 'swatch-strip';
@@ -59,7 +62,9 @@ function createThemePill(id, isCustom) {
     span.style.backgroundColor = 'transparent';
     swatchStrip.appendChild(span);
   }
-  li.appendChild(swatchStrip);
+  pillMeta.appendChild(swatchStrip);
+
+  li.appendChild(pillMeta);
 
   mountState.ul.appendChild(li);
   mountState.pills.set(id, li);
@@ -150,9 +155,11 @@ export async function mountThemesSidebar({ container, customThemes = [] }) {
     applyFilter();
   });
 
+  builtinThemes.sort((a, b) => a.localeCompare(b));
   for (const builtin of builtinThemes) {
     createThemePill(builtin, false);
   }
+  customThemes.sort((a, b) => a.localeCompare(b));
   for (const id of customThemes) {
     createThemePill(id, true);
   }
@@ -178,5 +185,15 @@ export async function mountThemesSidebar({ container, customThemes = [] }) {
 export function addCustomThemePill(id) {
   if (!mountState || mountState.pills.has(id)) return;
   createThemePill(id, true);
+
+  // Insert at correct alphabetical position among all pills
+  const pill = mountState.pills.get(id);
+  const sortedIds = [...mountState.pills.keys()].sort((a, b) => a.localeCompare(b));
+  const idx = sortedIds.indexOf(id);
+  if (idx < sortedIds.length - 1) {
+    const afterPill = mountState.pills.get(sortedIds[idx + 1]);
+    mountState.ul.insertBefore(pill, afterPill);
+  }
+
   if (mountState.applyFilter) mountState.applyFilter();
 }

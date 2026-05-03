@@ -13,7 +13,13 @@
     "source-code-pro",
     "victor-mono"
   ],
-  "themes": [],
+  "themes": [
+    "bluloco-light",
+    "gruvbox-material-light",
+    "light-owl",
+    "tokyo-night-light",
+    "winter-is-coming-light"
+  ],
   "languages": [
     "cpp",
     "go",
