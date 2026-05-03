@@ -71,6 +71,16 @@ function validateAgainstCatalog(s) {
 export function setCatalog(c) {
   catalog = c;
   state = validateAgainstCatalog(state);
+
+  if (!location.hash || location.hash === '#') {
+    if (c.fonts && c.fonts.length > 0) {
+      state.font = c.fonts[Math.floor(Math.random() * c.fonts.length)];
+    }
+    if (c.themes && c.themes.length > 0) {
+      state.theme = c.themes[Math.floor(Math.random() * c.themes.length)];
+    }
+  }
+
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch (e) { console.error(e); }
