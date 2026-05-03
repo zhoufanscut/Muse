@@ -1,4 +1,5 @@
 :root {
+  --theme-bg:     #1a1a2e;
   --bg:           #1a1a2e;
   --bg-elevated:  #16213e;
   --bg-active:    #1c2750;
@@ -8,6 +9,18 @@
   --accent-hover: #9080ff;
   --text:         #e0e0e0;
   --text-muted:   #888;
+}
+
+[data-theme="light"] {
+  --bg:           #ffffff;
+  --bg-elevated:  #f6f8fa;
+  --bg-active:    #e8eaed;
+  --border:       #d0d7de;
+  --border-hover: #6e5ce688;
+  --accent:       #6e5ce6;
+  --accent-hover: #5a4bd1;
+  --text:         #24292f;
+  --text-muted:   #656d76;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,7 +37,7 @@ body {
   gap: 16px;
   padding: 16px;
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--theme-bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -38,6 +51,7 @@ body {
 .pill {
   display: flex; align-items: center; gap: 6px;
   background: var(--bg-elevated);
+  color: var(--text);
   padding: 8px 14px;
   border-radius: 20px;
   border: 1px solid var(--border);
@@ -81,9 +95,9 @@ body {
   margin-left: auto;
 }
 .swatch-strip span {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
   display: inline-block;
 }
 
@@ -127,7 +141,7 @@ input[type="range"] {
 #boot-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg);
+  background: var(--theme-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -143,6 +157,7 @@ input[type="range"] {
   border-radius: 8px;
   border: 1px solid var(--border);
   padding: 24px;
+  background: var(--theme-bg);
 }
 .shiki {
   padding: 16px;

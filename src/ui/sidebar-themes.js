@@ -5,26 +5,19 @@ async function extractSwatches(themeName) {
   try {
     const theme = await getKnownTheme(themeName);
     const colors = [];
-    // editor.foreground
-    if (theme.colors?.['editor.foreground']) colors.push(theme.colors['editor.foreground']);
-    // editor.background
-    if (theme.colors?.['editor.background']) colors.push(theme.colors['editor.background']);
-    // tokenColors foregrounds (first 4 unique)
-    const seen = new Set(colors);
-    if (theme.tokenColors) {
-      for (const tc of theme.tokenColors) {
-        const fg = tc.settings?.foreground;
-        if (fg && !seen.has(fg) && colors.length < 6) {
-          colors.push(fg);
-          seen.add(fg);
-        }
+    const seen = new Set();
+    const rules = theme.tokenColors || theme.settings || [];
+    for (const rule of rules) {
+      const fg = rule.settings?.foreground;
+      if (fg && !seen.has(fg)) {
+        colors.push(fg);
+        seen.add(fg);
       }
+      if (colors.length >= 6) break;
     }
-    // Pad to 6 if needed
-    while (colors.length < 6) colors.push('#333');
-    return colors.slice(0, 6);
+    return colors;
   } catch {
-    return ['#333','#333','#333','#333','#333','#333'];
+    return [];
   }
 }
 

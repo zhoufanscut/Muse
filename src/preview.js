@@ -4,7 +4,7 @@
 // the caller should update container.style.fontSize directly instead of re-invoking
 // renderPreview. This avoids redundant highlight tokenization for a pure-CSS change.
 
-import { highlight, ensureLang, ensureCustomTheme, ensureCommentStyleTheme } from './themes.js';
+import { highlight, ensureLang, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme } from './themes.js';
 import { loadWebFont } from './fonts.js';
 import { loadSample } from './languages.js';
 
@@ -33,6 +33,16 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   } catch (e) {
     console.error(e);
   }
+
+  // Apply the theme's actual background color to the page chrome,
+  // and set light/dark mode based on the theme author's declared type.
+  // Runs after theme is loaded (ensureCommentStyleTheme guarantees that)
+  // but before highlighting.
+  try {
+    const themeObj = await getKnownTheme(theme);
+    document.documentElement.style.setProperty('--theme-bg', themeObj?.bg || '#1a1a2e');
+    document.documentElement.dataset.theme = themeObj?.type === 'light' ? 'light' : 'dark';
+  } catch { /* keep defaults */ }
 
   let code;
   try {
