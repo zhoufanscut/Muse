@@ -1,5 +1,6 @@
 import { setState, subscribe } from '../state.js';
 import { getKnownTheme, ensureCustomTheme } from '../themes.js';
+import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 
 async function extractSwatches(themeName) {
   try {
@@ -73,12 +74,10 @@ function createThemePill(id, isCustom) {
       setState({ theme: id });
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const next = li.nextElementSibling;
-      if (next && next.classList.contains('pill')) next.focus();
+      nextVisiblePill(li)?.focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      const prev = li.previousElementSibling;
-      if (prev && prev.classList.contains('pill')) prev.focus();
+      prevVisiblePill(li)?.focus();
     }
   });
 
@@ -114,6 +113,43 @@ export async function mountThemesSidebar({ container, customThemes = [] }) {
   const pills = new Map();
   mountState = { ul, pills, container };
 
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'sidebar-search-wrap';
+
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search themes\u2026';
+  searchInput.className = 'sidebar-search';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'sidebar-search-clear';
+  clearBtn.setAttribute('aria-label', 'Clear search');
+  clearBtn.tabIndex = -1;
+  clearBtn.textContent = '\u00d7';
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.focus();
+  });
+
+  searchWrap.append(searchInput, clearBtn);
+  container.appendChild(searchWrap);
+
+  let searchQuery = '';
+  function applyFilter() {
+    for (const [id, pill] of pills) {
+      const matches = !searchQuery || fuzzyScore(searchQuery, id) > 0;
+      pill.style.display = matches ? '' : 'none';
+    }
+  }
+  mountState.applyFilter = applyFilter;
+
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value.trim();
+    searchWrap.classList.toggle('has-value', searchQuery.length > 0);
+    applyFilter();
+  });
+
   for (const builtin of builtinThemes) {
     createThemePill(builtin, false);
   }
@@ -125,6 +161,7 @@ export async function mountThemesSidebar({ container, customThemes = [] }) {
 
   const addButton = document.createElement('button');
   addButton.className = 'pill';
+  addButton.id = 'add-theme-btn';
   addButton.style.marginTop = '16px';
   addButton.style.justifyContent = 'center';
   addButton.textContent = '+ Add theme';
@@ -141,4 +178,5 @@ export async function mountThemesSidebar({ container, customThemes = [] }) {
 export function addCustomThemePill(id) {
   if (!mountState || mountState.pills.has(id)) return;
   createThemePill(id, true);
+  if (mountState.applyFilter) mountState.applyFilter();
 }

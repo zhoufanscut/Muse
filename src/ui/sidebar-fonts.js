@@ -1,5 +1,6 @@
 import { getState, setState, subscribe } from '../state.js';
 import { loadWebFont } from '../fonts.js';
+import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 
 let mountState = null;
 
@@ -84,10 +85,10 @@ function createFontPill(font) {
       handleSelect();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      li.nextElementSibling?.focus();
+      nextVisiblePill(li)?.focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      li.previousElementSibling?.focus();
+      prevVisiblePill(li)?.focus();
     }
   });
 }
@@ -132,6 +133,46 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
   mountState = { ul, entryMap, container, observer, allFonts };
 
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'sidebar-search-wrap';
+
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search fonts\u2026';
+  searchInput.className = 'sidebar-search';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'sidebar-search-clear';
+  clearBtn.setAttribute('aria-label', 'Clear search');
+  clearBtn.tabIndex = -1;
+  clearBtn.textContent = '\u00d7';
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.focus();
+  });
+
+  searchWrap.append(searchInput, clearBtn);
+  container.appendChild(searchWrap);
+
+  let searchQuery = '';
+  function applyFilter() {
+    for (const [id, { li }] of entryMap) {
+      const font = allFonts.find(f => f.id === id);
+      const matches = !searchQuery ||
+        fuzzyScore(searchQuery, font.name) > 0 ||
+        fuzzyScore(searchQuery, font.id) > 0;
+      li.style.display = matches ? '' : 'none';
+    }
+  }
+  mountState.applyFilter = applyFilter;
+
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value.trim();
+    searchWrap.classList.toggle('has-value', searchQuery.length > 0);
+    applyFilter();
+  });
+
   container.appendChild(ul);
 
   for (const font of allFonts) {
@@ -158,4 +199,5 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 export function addCustomFontPill(font) {
   if (!mountState || mountState.entryMap.has(font.id)) return;
   createFontPill(font);
+  if (mountState.applyFilter) mountState.applyFilter();
 }

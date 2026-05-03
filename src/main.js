@@ -74,7 +74,7 @@ try {
     langManifests,
   });
 
-  const addThemeBtn = sidebarThemes.querySelector('button');
+  const addThemeBtn = document.getElementById('add-theme-btn');
 
   mountUploaders({
     addFontBtn: document.getElementById('add-font-btn'),
