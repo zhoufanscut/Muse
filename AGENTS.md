@@ -39,9 +39,11 @@ node scripts/rebuild-index.mjs     # regenerate data/_index.json after data chan
 node scripts/rebuild-index.mjs --check   # validate-only (no write)
 ```
 
-Node.js 18+ required. The rebuild script uses only `node:fs`, zero dependencies.
+Node.js 18+ required (CI uses 20). The rebuild script uses only `node:fs`, zero dependencies.
 
 **Do NOT test with `file://`.** Browsers block `fetch()` for ES modules and data on file protocol.
+
+**Manual verification only.** No test runner exists. Start the HTTP server, open the browser, check the console for errors. The boot overlay displays "Failed to start: …" in red if `_index.json` is missing or malformed.
 
 ## Data contribution rules
 
@@ -91,10 +93,27 @@ Never edit it manually. CI regenerates it on push to `main`. The rebuild script 
 `src/main.js` fetches `data/_index.json` on app load. If this file is missing or invalid, the entire app fails with "Failed to start". When adding new assets, run `node scripts/rebuild-index.mjs` before testing.
 
 ### Runtime assets (localStorage) vs repo assets
-Fonts/themes uploaded at runtime via the UI dialogs persist in `localStorage` **only**. They are NOT backed by repo JSON files. A shared URL referencing a runtime-only asset falls back to defaults on a different device. When the `setCatalog()` is called, runtime asset IDs must be included in the catalog BEFORE validation runs — otherwise state pointing to runtime assets gets clobbered to defaults on reload.
+Fonts/themes uploaded at runtime via the UI dialogs persist in `localStorage` **only**. They are NOT backed by repo JSON files. A shared URL referencing a runtime-only asset falls back to defaults on a different device.
+
+**Boot sequence matters:** runtime asset IDs are read from `localStorage` in `src/main.js` *before* `setCatalog()` is called. This ensures `setCatalog()` knows about runtime-only IDs and doesn't clobber state pointing to them during validation. Rearranging this order breaks runtime asset restoration on page reload.
 
 ### Shiki version
 Pinned to `https://esm.sh/shiki@1.24.0` in `src/themes.js`. Changing this requires verifying that all custom theme loading still works, the theme API hasn't changed, and all `shikiLang` values in language manifests are still valid.
+
+### Sample path convention
+Language manifests store `sample` as a **relative path without `./` prefix** (e.g. `"sample": "data/samples/python.txt"`). The loader (`src/languages.js`) prepends `./` at fetch time. Never include `./` in the manifest's `sample` field — it would produce `././data/samples/x.txt` and break.
+
+### Custom theme slug prefix
+Runtime-uploaded themes get slugs prefixed with `custom-` (see `slugify()` in `src/ui/uploaders.js`). This distinguishes runtime-only themes from repo themes and prevents accidental filename collisions. Repo themes never use this prefix.
+
+### localStorage keys
+```
+muse:state          — current selection (font/theme/lang/size/ligatures/italic)
+muse:custom-fonts   — array of user-uploaded font objects
+muse:custom-themes  — array of {id, theme} for user-uploaded VSCode themes
+muse:found-fonts    — array of fonts detected as installed on this device
+```
+All values are JSON. Clearing a key or corrupting it triggers fallback to defaults — the app never crashes on bad localStorage.
 
 ## CI
 
