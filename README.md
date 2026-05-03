@@ -2,6 +2,19 @@
 
 Muse is a static, no-build-step web app that lets visitors live-preview any coding font, VSCode theme, and programming language combination in real time. Fonts load from CDN (no local install required), themes render through Shiki, and languages come with idiomatic sample programs. Selection state is shareable via URL hash. Everything is plain HTML, ES modules, and JSON — no bundler, no transpiler, no `npm install`.
 
+## Using the app
+
+- **Live preview** — pick any font × theme × language combo from the sidebars and tabs.
+- **Randomized on first visit** — opening Muse without a URL hash picks a random font and theme so each landing surfaces something new. Subsequent changes stick via `localStorage`.
+- **Detected fonts** — Muse probes ~40 popular system/coding fonts on your machine (Menlo, Monaco, JetBrains Mono, Fira Code, Iosevka, …) and lists the ones it finds, no CDN needed.
+- **Add your own font (in-browser)** — the "Add Font" dialog accepts a CSS URL *or* an `@font-face` snippet, and can also probe whether a named font is already installed locally. Custom fonts are saved in `localStorage` on this device only.
+- **Add your own theme (in-browser)** — drop a `.json` file or paste any VSCode theme JSON. Stored in `localStorage` on this device only.
+- **Tweak rendering** — size slider, ligature toggle, and italic-comments toggle in the footer.
+- **Filter the sidebars** — fuzzy-search the font and theme pills; arrow keys move between them.
+- **Share via URL** — every change updates the URL hash; share it to reproduce the exact look on another device (built-in assets only).
+
+---
+
 ## Add a font (1 file)
 
 Drop a JSON file at `data/fonts/<id>.json`:
@@ -20,6 +33,8 @@ Drop a JSON file at `data/fonts/<id>.json`:
 
 The filename stem (`fira-code`) is the canonical id and must match the `id` field. The `cssUrl` should point to a Google Fonts or Fontsource stylesheet. The `stack` is the CSS `font-family` value applied to the preview.
 
+Repo manifests use `cssUrl` only. The in-browser "Add Font" uploader additionally accepts an `@font-face` snippet for one-off use — see *Using the app*.
+
 That is the only file you need. On push to `main`, CI runs `scripts/rebuild-index.mjs`, which validates the file and regenerates `data/_index.json` automatically. The new font appears in the sidebar on the next deploy.
 
 Optional fields: `ligatures` (boolean), `weights` (array of numbers), `credits` (URL or attribution string).
@@ -35,6 +50,8 @@ The filename stem is the canonical id, used in the URL hash (`?theme=<id>`). The
 One file is all you need. CI validates the theme shape and regenerates the index on push.
 
 Built-in Shiki themes are listed in `data/themes/_builtin.json` and do not need individual files. Only custom themes (not shipped by Shiki) go in `data/themes/`.
+
+The custom themes currently committed to `data/themes/` are all light variants; dark coverage is provided by Shiki built-ins listed in `data/themes/_builtin.json`.
 
 ---
 
