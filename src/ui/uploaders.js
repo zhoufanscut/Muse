@@ -8,6 +8,43 @@ function slugify(name) {
   return 'custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// Reject anything that isn't a hex color or empty. Shiki splats these straight
+// into inline style attributes; a value like `red;background:url(...)` would
+// CSS-inject. Real VSCode themes only ever use hex.
+const COLOR_RE = /^(#[0-9a-fA-F]{3,8})?$/;
+
+function validateThemeColors(theme) {
+  const bad = (val, where) => {
+    if (val == null) return null;
+    if (typeof val !== 'string') return `${where}: must be a string`;
+    if (!COLOR_RE.test(val)) return `${where}: invalid color "${val}"`;
+    return null;
+  };
+
+  if (theme.colors && typeof theme.colors === 'object') {
+    for (const [k, v] of Object.entries(theme.colors)) {
+      const err = bad(v, `colors.${k}`);
+      if (err) return err;
+    }
+  }
+
+  const checkRules = (rules, label) => {
+    if (!Array.isArray(rules)) return null;
+    for (let i = 0; i < rules.length; i++) {
+      const s = rules[i]?.settings;
+      if (!s) continue;
+      const fg = bad(s.foreground, `${label}[${i}].settings.foreground`);
+      if (fg) return fg;
+      const bg = bad(s.background, `${label}[${i}].settings.background`);
+      if (bg) return bg;
+    }
+    return null;
+  };
+
+  return checkRules(theme.tokenColors, 'tokenColors')
+      || checkRules(theme.settings, 'settings');
+}
+
 function createDialog() {
   const dialog = document.createElement('dialog');
   dialog.className = 'upload-dialog';
@@ -265,6 +302,11 @@ function showThemeDialog({ onThemeAdded, onStatus }) {
       const theme = JSON.parse(json);
       if (!theme.colors && !theme.tokenColors && !theme.settings) {
         onStatus?.('Not a valid VSCode theme: missing colors, tokenColors, or settings.');
+        return;
+      }
+      const colorErr = validateThemeColors(theme);
+      if (colorErr) {
+        onStatus?.('Theme rejected — ' + colorErr);
         return;
       }
       const id = slugify(theme.name || 'unnamed');
