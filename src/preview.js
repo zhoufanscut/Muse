@@ -82,14 +82,6 @@ function applyFontStyles({ container, font, size, ligatures, italic }) {
   container.classList.toggle('no-liga', !ligatures);
   container.classList.toggle('italic-comments', italic);
 
-  const disambig = container.nextElementSibling?.classList.contains('disambig')
-    ? container.nextElementSibling
-    : null;
-  if (disambig) {
-    disambig.style.fontFamily = font.stack;
-    disambig.style.fontSize = size + 'px';
-    disambig.classList.toggle('no-liga', !ligatures);
-  }
 }
 
 function escapeHtml(s) {

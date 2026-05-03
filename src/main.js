@@ -71,7 +71,6 @@ try {
   mountControls({
     controlsBar,
     langTabsContainer: langTabs,
-    previewPane,
     langManifests,
   });
 

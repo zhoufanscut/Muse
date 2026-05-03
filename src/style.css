@@ -15,12 +15,12 @@
 body {
   display: grid;
   grid-template-columns: 240px 1fr 240px;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr;
   grid-template-areas:
     "fonts header  themes"
     "fonts tabs    themes"
-    "fonts preview themes"
-    "fonts ctrls   themes";
+    "fonts ctrls   themes"
+    "fonts preview themes";
   gap: 16px;
   padding: 16px;
   min-height: 100vh;
@@ -49,18 +49,9 @@ body {
 .pill[aria-selected="true"] { border-color: var(--accent); background: var(--bg-active); }
 .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.disambig {
-  font-family: inherit;  /* inherits from active font set on preview-pane */
-  color: inherit;        /* inherits from active theme foreground */
-  padding: 8px 0;
-  font-size: 1em;
-  letter-spacing: 0.05em;
-  opacity: 0.8;
-}
 
 .preview-pane { font-feature-settings: "liga", "calt"; }
-.preview-pane.no-liga,
-.disambig.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
+.preview-pane.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
 .preview-pane.italic-comments .shiki .comment,
 .preview-pane.italic-comments .shiki [style*="font-style:italic"] {
   font-style: italic !important;

@@ -1,6 +1,6 @@
 import { getState, setState, subscribe } from '../state.js';
 
-export function mountControls({ controlsBar, langTabsContainer, previewPane, langManifests }) {
+export function mountControls({ controlsBar, langTabsContainer, langManifests }) {
   const state = getState();
   
   const sizeLabel = document.createElement('label');
@@ -62,12 +62,7 @@ export function mountControls({ controlsBar, langTabsContainer, previewPane, lan
       }
     });
   }
-  
-  const disambig = document.createElement('div');
-  disambig.className = 'disambig';
-  disambig.textContent = '0O oO  1lI |  {} [] ()  ;: ,.  -> =>  != ==  \'\' ""  ``';
-  previewPane.after(disambig);
-  
+    
   subscribe((s) => {
     sizeSlider.value = String(s.size);
     sizeReadout.textContent = s.size + 'px';
