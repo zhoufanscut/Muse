@@ -1,0 +1,8 @@
+{
+  "id": "csharp",
+  "label": "C#",
+  "shikiLang": "csharp",
+  "sample": "data/samples/csharp.txt",
+  "summary": "LINQ-based order processing pipeline exercising records, pattern matching, and async/await.",
+  "exercises": ["records", "LINQ", "switch expression", "pattern matching", "string interpolation", "async/await", "primary constructors", "collection initializers"]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "javascript",
+  "label": "JavaScript",
+  "shikiLang": "javascript",
+  "sample": "data/samples/javascript.txt",
+  "summary": "Debounced concurrent data fetcher with LRU cache, Proxy instrumentation, and abort handling.",
+  "exercises": ["class", "async/await", "Proxy", "Map", "destructuring", "template literal", "arrow function", "optional chaining", "nullish coalescing", "AbortController", "private fields", "Promise.all/race"]
+}

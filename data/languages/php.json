@@ -1,0 +1,8 @@
+{
+  "id": "php",
+  "label": "PHP",
+  "shikiLang": "php",
+  "sample": "data/samples/php.txt",
+  "summary": "Attribute-driven data-processing pipeline with enums, readonly classes, and match expressions.",
+  "exercises": ["namespace", "class", "enum", "attributes", "constructor promotion", "typed properties", "match expression", "readonly class", "readonly modifier", "arrow function", "null coalescing", "named arguments", "heredoc", "strict types"]
+}

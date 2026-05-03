@@ -1,0 +1,100 @@
+/**
+ * OrderFulfillment.java -- A small order processing demo that validates
+ * pending orders, computes totals, and writes a summary report.
+ *
+ * <p>Exercises: records, sealed interface + pattern-matching switch,
+ * enum, generics, Stream API, Optional, try-with-resources, text block.
+ */
+import java.util.*;
+import java.util.stream.*;
+/* ---- Data model -------------------------------------------------- */
+enum TaskStatus { PENDING, PROCESSING, COMPLETED, CANCELLED }
+record OrderItem(String product, int quantity, double unitPrice) {
+    double total() { return quantity * unitPrice; }
+}
+record Order(UUID id, List<OrderItem> items, TaskStatus status) {
+    double totalAmount() {
+        return items.stream().mapToDouble(OrderItem::total).sum();
+    }
+}
+/* ---- Sealed result type (Java 17) -------------------------------- */
+sealed interface TaskResult<T> permits TaskResult.Success, TaskResult.Failure {
+    record Success<T>(T value) implements TaskResult<T> {}
+    record Failure<T>(String reason) implements TaskResult<T> {}
+}
+/* ---- Processor --------------------------------------------------- */
+class OrderProcessor {
+    static final String HEADER = "Order Processor v1.0";
+    /** Filter pending orders that have at least one item. */
+    List<Order> filterPending(List<Order> orders) {
+        return orders.stream()
+            .filter(o -> o.status() == TaskStatus.PENDING)
+            .filter(o -> !o.items().isEmpty())
+            .toList();
+    }
+    /** Process a single order, returning a sealed result. */
+    TaskResult<Double> processOrder(Order order) {
+        if (order.totalAmount() < 0.01) {          // numeric literal
+            return new TaskResult.Failure<>("amount too small: " + order.totalAmount());
+        }
+        var value = Optional.of(order)
+            .filter(o -> o.totalAmount() > 0)
+            .map(Order::totalAmount)
+            .orElse(0.0);
+        return new TaskResult.Success<>(value);
+    }
+    /** Pattern-matching switch on sealed type (Java 17). */
+    String describeResult(TaskResult<Double> result) {
+        return switch (result) {
+            case TaskResult.Success<Double> s ->
+                String.format("OK  $%.2f", s.value());
+            case TaskResult.Failure<Double> f ->
+                "ERR " + f.reason();
+        };
+    }
+}
+/* ---- AutoCloseable report writer --------------------------------- */
+class ReportWriter implements AutoCloseable {
+    private final List<String> lines = new ArrayList<>();
+    void writeLine(String line) { lines.add(line); }
+    @Override
+    public void close() {
+        System.out.println("--- Report (auto-closed) ---");
+        lines.forEach(System.out::println);
+    }
+}
+
+/* ---- Entry point ------------------------------------------------- */
+public class OrderFulfillment {
+    static final String CONFIG =
+            """
+            # Order Processing Config
+            min-amount = 0.01
+            max-items  = 100
+            """;  // text block (Java 15+)
+
+    public static void main(String[] args) {
+        /* Block comment: build mock order data */
+        var items = List.of(
+            new OrderItem("Widget", 2, 9.99),
+            new OrderItem("Gadget", 1, 24.50)
+        );
+        var orders = List.of(
+            new Order(UUID.randomUUID(), items,     TaskStatus.PENDING),
+            new Order(UUID.randomUUID(), List.of(), TaskStatus.CANCELLED),
+            new Order(UUID.randomUUID(), items,     TaskStatus.PENDING)
+        );
+        // line comment: demonstrate the pipeline
+        System.out.println(OrderProcessor.HEADER);
+        var processor = new OrderProcessor();
+        try (var report = new ReportWriter()) {
+            var pending = processor.filterPending(orders);
+            report.writeLine("Pending: " + pending.size() + " orders");
+            for (var order : pending) {
+                var result = processor.processOrder(order);
+                report.writeLine(processor.describeResult(result));
+            }
+        } // ReportWriter.close() called automatically
+        System.out.print(CONFIG);
+    }
+}

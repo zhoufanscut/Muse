@@ -1,0 +1,8 @@
+{
+  "id": "java",
+  "label": "Java",
+  "shikiLang": "java",
+  "sample": "data/samples/java.txt",
+  "summary": "Order fulfillment pipeline with records, sealed types, and Stream API.",
+  "exercises": ["record", "sealed interface", "enum", "generics", "Stream API", "Optional", "try-with-resources", "text block", "pattern-matching switch"]
+}

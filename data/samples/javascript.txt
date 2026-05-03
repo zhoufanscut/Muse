@@ -1,0 +1,100 @@
+/**
+ * fetcher.js — Debounced concurrent data fetcher with LRU caching,
+ * AbortController support, and Proxy-based instrumentation. Features:
+ * class, async/await, Proxy, Map, destructuring, template literals,
+ * arrow functions, optional chaining, nullish coalescing,
+ * AbortController + fetch, private class fields (#), Promise.all/race.
+ */
+const debounce = (fn, delay = 300) => {
+  let timer;
+  return (...args) => new Promise((resolve) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => resolve(fn(...args)), delay);
+  });
+};
+
+class FetchCache {
+  #cache = new Map();
+  #pending = new Map();
+  #maxSize;
+  #ttl;
+  constructor({ maxSize = 100, ttl = 60_000 } = {}) {
+    this.#maxSize = maxSize; /* block comment: max entries */
+    this.#ttl = ttl;         // line comment: TTL ms
+  }
+  async fetch(url, options = {}) {
+    const cached = this.#cache.get(url);
+    if (cached && Date.now() - cached.ts < this.#ttl) return cached.data;
+    const pending = this.#pending.get(url);
+    if (pending) return pending; // dedup in-flight requests
+    const controller = new AbortController();
+    const signal = options.signal ?? controller.signal;
+    const promise = (async () => {
+      try {
+        const response = await fetch(url, { signal, ...options });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+        const data = await response.json();
+        this.#cache.set(url, { data, ts: Date.now() });
+        if (this.#cache.size > this.#maxSize) {
+          const firstKey = this.#cache.keys().next().value;
+          this.#cache.delete(firstKey);
+        }
+        return data;
+      } finally {
+        this.#pending.delete(url);
+      }
+    })();
+    this.#pending.set(url, promise);
+    return promise;
+  }
+  async fetchAll(urls, options) {
+    return Promise.all(urls.map((url) => this.fetch(url, options)));
+  }
+  get size() {
+    return this.#cache.size;
+  }
+}
+
+const instrument = (fetcher) => {
+  const stats = { hits: 0, misses: 'none' };
+  return new Proxy(fetcher, {
+    get(target, prop, receiver) {
+      if (prop === 'fetch') {
+        return async (...args) => {
+          const hit = target.size > 0;
+          hit ? stats.hits++ : (stats.misses = 'active');
+          return Reflect.apply(target.fetch, target, args);
+        };
+      }
+      if (prop === 'stats') return stats;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+};
+
+// ---- Demo ----
+(async () => {
+  const cache = new FetchCache({ maxSize: 50 });
+  const fetcher = instrument(cache);
+  const API = "https://jsonplaceholder.typicode.com";
+  const urls = [`${API}/posts/1`, `${API}/posts/2`, `${API}/posts/3`];
+  const timeout = (ms) =>
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timed out")), ms)
+    );
+  try {
+    const [first, ...rest] = await Promise.race([
+      fetcher.fetchAll(urls),
+      timeout(5_000),
+    ]);
+    console.log(`First: ${first?.title ?? '(none)'}`);
+    for (const { id, title } of rest) {
+      console.log(`Post #${id}: "${title}"`);
+    }
+  } catch (err) {
+    console.error('Fetch failed:', err?.message);
+  }
+  const delayed = debounce(() => fetcher.fetch(`${API}/posts/4`), 500);
+  await delayed();
+  console.log(`Cache entries: ${cache.size}`);
+})();

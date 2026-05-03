@@ -1,0 +1,96 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+/// <summary>
+/// OrderPipeline.cs — LINQ-based order processing pipeline exercising
+/// C# features: records, pattern matching, switch expressions, async/await.
+/// </summary>
+namespace OrderProcessing;
+public record OrderLine(string Product, int Quantity, decimal UnitPrice);
+public record struct Order(int Id, string Customer, DateTime Placed)
+{
+    public OrderStatus Status { get; init; } = OrderStatus.Pending;
+    public List<OrderLine> Lines { get; init; } = new();
+}
+public enum OrderStatus { Pending, Processing, Shipped, Cancelled }
+public static class DiscountCalculator
+{
+    public static decimal GetDiscountRate(Order order) => order switch
+    {
+        { Status: OrderStatus.Cancelled } => 0m,
+        { Lines.Count: > 10 } => 0.15m,
+        { Customer: var c } when c.StartsWith("VIP") => 0.10m,
+        { Lines.Count: > 0 } => 0.05m,
+        _ => 0m,
+    };
+}
+public class OrderProcessor
+{
+    private static readonly decimal TaxRate = 0.08m;
+
+    public async Task<OrderSummary> ProcessAsync(List<Order> orders)
+    {
+        var active = orders
+            .Where(o => o is { Status: not OrderStatus.Cancelled })
+            .Select(o => o with { Lines = o.Lines.Where(l => l.Quantity > 0).ToList() })
+            .ToList();
+        var priced = active.Select(o =>
+        {
+            var subtotal = o.Lines.Sum(l => l.Quantity * l.UnitPrice);
+            var discount = subtotal * DiscountCalculator.GetDiscountRate(o);
+            return new { o.Id, o.Customer, Subtotal = subtotal, Discount = discount };
+        }).ToList();
+        var totalRevenue = priced.Aggregate(0m, (sum, p) => sum + p.Subtotal - p.Discount);
+        var totalTax = totalRevenue * TaxRate;
+        /* Simulate async I/O — real code would call a data store here. */
+        await Task.Delay(100);
+        var report = $"""
+            Order Processing Report
+            -----------------------
+            Orders processed: {priced.Count}
+            Total Revenue:    ${totalRevenue:F2}
+            Tax ({TaxRate:P0}):        ${totalTax:F2}
+            Grand Total:      ${totalRevenue + totalTax:F2}
+
+            Customer Breakdown:
+            {string.Join(Environment.NewLine, priced.Select(p =>
+                $"  {p.Customer}: Order #{p.Id} — ${p.Subtotal - p.Discount:F2}"))}
+            """;
+        return new OrderSummary(totalRevenue, totalTax, report);
+    }
+}
+public record OrderSummary(decimal Revenue, decimal Tax, string Report)
+{
+    public string GrandTotalFormatted => $"${Revenue + Tax:F2}";
+}
+public static class Program
+{
+    public static async Task Main()
+    {
+        var orders = new List<Order>
+        {
+            new(1, "Alice", DateTime.Today)
+            {
+                Lines = { new("Widget", 5, 9.99m), new("Gadget", 2, 24.50m) }
+            },
+            new(2, "VIP-Bob", DateTime.Today.AddDays(-1))
+            {
+                Status = OrderStatus.Shipped,
+                Lines = { new("Premium Kit", 1, 199.99m) }
+            },
+            new(3, "Charlie", DateTime.Today)
+            {
+                Status = OrderStatus.Cancelled,
+                Lines = { new("Unknown", 0, 0m) }
+            },
+        };
+        var processor = new OrderProcessor();
+        var summary = await processor.ProcessAsync(orders);
+        Console.WriteLine(summary.Report);
+        // Verbatim string with Windows filesystem path
+        var logPath = @"C:\logs\orders.txt";
+        Console.WriteLine($"Log written to: {logPath}");
+    }
+}

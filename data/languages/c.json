@@ -1,0 +1,8 @@
+{
+  "id": "c",
+  "label": "C",
+  "shikiLang": "c",
+  "sample": "data/samples/c.txt",
+  "summary": "Intrusive ring buffer with debug validation, function-pointer walker, and errno handling.",
+  "exercises": ["#include", "typedef struct", "malloc/free", "function pointers", "enum", "#define", "assert", "snprintf", "static functions", "const-correctness", "errno/strerror", "size_t"]
+}

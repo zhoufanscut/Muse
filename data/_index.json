@@ -21,9 +21,14 @@
     "winter-is-coming-light"
   ],
   "languages": [
+    "c",
     "cpp",
+    "csharp",
     "go",
+    "java",
+    "javascript",
     "lua",
+    "php",
     "python",
     "rust",
     "typescript"

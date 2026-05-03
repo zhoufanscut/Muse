@@ -1,0 +1,95 @@
+/**
+ * @file ringbuf.c — Intrusive ring buffer with debug validation.
+ *
+ * Features: #include, typedef struct, malloc/free, function pointers,
+ * enum, #define, assert(3), snprintf, static, const, errno/strerror,
+ * size_t, char/string literals, numeric literal.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <errno.h>
+
+#define RB_CAPACITY 128                   /* numeric literal (int) */
+
+typedef enum { RB_OK = 0, RB_FULL, RB_EMPTY } rb_status_t;
+
+typedef struct RingBuf {
+    unsigned char *buf;  /* raw storage               */
+    size_t          head, tail, cap;
+} RingBuf;
+
+/** Visitor callback — function-pointer demo */
+typedef void (*rb_walk_fn)(const void *elem, size_t esize, void *user);
+
+/* ---------- Core operations ---------- */
+
+static rb_status_t rb_push(RingBuf *rb, const void *src, size_t esize) {
+    if ((rb->tail + 1) % rb->cap == rb->head) return RB_FULL;
+    memcpy(rb->buf + rb->tail * esize, src, esize);
+    rb->tail = (rb->tail + 1) % rb->cap;
+    return RB_OK;
+}
+
+static rb_status_t rb_pop(RingBuf *rb, void *dst, size_t esize) {
+    if (rb->head == rb->tail) return RB_EMPTY;
+    memcpy(dst, rb->buf + rb->head * esize, esize);
+    rb->head = (rb->head + 1) % rb->cap;
+    return RB_OK;
+}
+
+void rb_walk(const RingBuf *rb, rb_walk_fn fn, void *user, size_t esize) {
+    size_t i = rb->head;
+    while (i != rb->tail) {
+        fn((const void *)(rb->buf + i * esize), esize, user);
+        i = (i + 1) % rb->cap;
+    }
+}
+
+/* ---------- Lifecycle ---------- */
+
+RingBuf *rb_create(size_t esize) {
+    RingBuf *rb = (RingBuf *)malloc(sizeof(RingBuf));
+    assert(rb != NULL);
+    rb->buf = (unsigned char *)malloc(RB_CAPACITY * esize);
+    if (rb->buf == NULL) {
+        char msg[128];
+        snprintf(msg, sizeof(msg), "rb_create: %s", strerror(errno));
+        fprintf(stderr, "%s\n", msg);       /* string literal */
+        free(rb);
+        return NULL;
+    }
+    rb->head = rb->tail = 0; rb->cap = RB_CAPACITY;
+    return rb;
+}
+
+void rb_destroy(RingBuf *rb) { free(rb->buf); free(rb); }
+
+/* ---------- Demo walk visitor ---------- */
+
+static void print_int_cb(const void *elem, size_t esz, void *user) {
+    (void)esz; (void)user;
+    printf(" %d", *(const int *)elem);      /* const-correct cast */
+}
+
+/* ---------- Main ---------- */
+
+int main(void) {
+    RingBuf *rb = rb_create(sizeof(int));   // int-sized ring buffer
+    for (int v = 1; v <= 5; v++) rb_push(rb, &v, sizeof(int));
+
+    printf("Contents:"); rb_walk(rb, print_int_cb, NULL, sizeof(int));
+    printf("\n");
+
+    /* Drain with char-literal progress dots */
+    int val;
+    while (rb_pop(rb, &val, sizeof(int)) == RB_OK) putchar('.');
+
+    char *label = (char *)malloc(32);
+    snprintf(label, 32, "done — tail=%zu", rb->tail);
+    printf("\n%s\n", label);
+    free(label);
+    rb_destroy(rb);
+    return 0;
+}

@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * Attribute-driven data-processing pipeline. Articles carry transformation
+ * rules as PHP 8 attributes; a reflection-based Pipeline applies them.
+ * Exercises enums, readonly classes, constructor promotion, match
+ * expressions, arrow functions, null coalescing, and named arguments.
+ */
+declare(strict_types=1);
+
+namespace App\Pipeline;
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+readonly class Transform
+{
+    public function __construct(
+        public string $method = 'trim',
+    ) {}
+}
+// ── Backed enum ──
+enum Status: string
+{
+    case Draft     = 'draft';
+    case Review    = 'review';
+    case Published = 'published';
+}
+// ── Domain model (constructor promotion + typed readonly props) ──
+readonly class Article
+{
+    public function __construct(
+        #[Transform(method: 'trim')]
+        public string $title,
+
+        #[Transform(method: 'strip_tags')]
+        public string $body,
+
+        public Status $status = Status::Draft,
+    ) {}
+}
+// ── Reflection-driven processor ──
+class Pipeline
+{
+    /** Apply attribute-driven transformations to each property. */
+    public function process(object $subject): object
+    {
+        $ref = new \ReflectionObject($subject);
+        foreach ($ref->getProperties() as $prop) {
+            $attrs = $prop->getAttributes(Transform::class);
+            if (count($attrs) === 0) { continue; }
+
+            $value = $prop->isInitialized($subject)
+                ? $prop->getValue($subject)
+                : null;
+            $value ??= ''; // null coalescing assignment
+
+            $attr     = $attrs[0]->newInstance();
+            $newValue = match ($attr->method) {
+                'trim'       => trim((string) $value),
+                'strip_tags' => strip_tags((string) $value),
+                default      => (string) $value,
+            };
+            $prop->setValue($subject, $newValue);
+        }
+        return $subject;
+    }
+}
+// ── Usage ──
+$article = new Article(
+    title: '  Hello, World!  ',   /* named arg */
+    body: '<p>A <strong>PHP</strong> article.</p>',
+    status: Status::Draft,
+);
+
+$pipeline  = new Pipeline();
+$processed = $pipeline->process($article);
+
+// Arrow-function extraction — pull readable field summaries.
+$fields = array_map(
+    fn(string $k) => $k . ': ' . ($processed->$k ?? '(null)'),
+    ['title', 'body', 'status'],
+);
+
+$display = match ($processed->status) {
+    Status::Draft     => 'This article is a draft.',
+    Status::Review    => 'This article is under review.',
+    Status::Published => 'This article is published.',
+};
+echo implode("\n", $fields) . "\n" . $display . "\n";
+
+// Heredoc summary (variable interpolation).
+$count = 2; /* numeric literal: articles processed */
+
+$report = <<<REPORT
+Pipeline complete.
+Number of articles processed: $count
+REPORT;
+echo $report . "\n";
