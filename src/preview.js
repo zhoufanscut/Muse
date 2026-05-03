@@ -4,7 +4,7 @@
 // the caller should update container.style.fontSize directly instead of re-invoking
 // renderPreview. This avoids redundant highlight tokenization for a pure-CSS change.
 
-import { highlight, ensureLang, ensureCustomTheme } from './themes.js';
+import { highlight, ensureLang, ensureCustomTheme, ensureCommentStyleTheme } from './themes.js';
 import { loadWebFont } from './fonts.js';
 import { loadSample } from './languages.js';
 
@@ -27,6 +27,13 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
 
   await ensureLang(lang);
 
+  let renderTheme = theme;
+  try {
+    renderTheme = await ensureCommentStyleTheme(theme, italic);
+  } catch (e) {
+    console.error(e);
+  }
+
   let code;
   try {
     code = await loadSample(langManifest);
@@ -37,7 +44,7 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
 
   let html;
   try {
-    html = await highlight(code, lang, theme);
+    html = await highlight(code, lang, renderTheme);
   } catch (e) {
     // Fallback: plain <pre> with banner — font still applies
     console.error(e);
