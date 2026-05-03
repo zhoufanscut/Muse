@@ -1,13 +1,55 @@
 const LOCAL_STORAGE_KEY = 'muse:custom-fonts';
+const FOUND_FONTS_KEY = 'muse:found-fonts';
 
 const LOCAL_FONTS = [
+  // macOS system
   { id: 'menlo', name: 'Menlo', stack: "'Menlo', monospace" },
   { id: 'monaco', name: 'Monaco', stack: "'Monaco', monospace" },
   { id: 'sf-mono', name: 'SF Mono', stack: "'SF Mono', monospace" },
+  // Windows system
   { id: 'consolas', name: 'Consolas', stack: "'Consolas', monospace" },
-  { id: 'andale-mono', name: 'Andale Mono', stack: "'Andale Mono', monospace" },
   { id: 'courier-new', name: 'Courier New', stack: "'Courier New', monospace" },
+  // Linux system
+  { id: 'dejavu-sans-mono', name: 'DejaVu Sans Mono', stack: "'DejaVu Sans Mono', monospace" },
+  { id: 'liberation-mono', name: 'Liberation Mono', stack: "'Liberation Mono', monospace" },
+  // Common on multiple platforms
+  { id: 'andale-mono', name: 'Andale Mono', stack: "'Andale Mono', monospace" },
   { id: 'pt-mono', name: 'PT Mono', stack: "'PT Mono', monospace" },
+  // Popular manually-installed coding fonts
+  { id: 'jetbrains-mono', name: 'JetBrains Mono', stack: "'JetBrains Mono', monospace" },
+  { id: 'fira-code', name: 'Fira Code', stack: "'Fira Code', monospace" },
+  { id: 'cascadia-code', name: 'Cascadia Code', stack: "'Cascadia Code', monospace" },
+  { id: 'cascadia-mono', name: 'Cascadia Mono', stack: "'Cascadia Mono', monospace" },
+  { id: 'source-code-pro', name: 'Source Code Pro', stack: "'Source Code Pro', monospace" },
+  { id: 'hack', name: 'Hack', stack: "'Hack', monospace" },
+  { id: 'iosevka', name: 'Iosevka', stack: "'Iosevka', monospace" },
+  { id: 'ubuntu-mono', name: 'Ubuntu Mono', stack: "'Ubuntu Mono', monospace" },
+  { id: 'inconsolata', name: 'Inconsolata', stack: "'Inconsolata', monospace" },
+  { id: 'droid-sans-mono', name: 'Droid Sans Mono', stack: "'Droid Sans Mono', monospace" },
+  { id: 'noto-sans-mono', name: 'Noto Sans Mono', stack: "'Noto Sans Mono', monospace" },
+  { id: 'roboto-mono', name: 'Roboto Mono', stack: "'Roboto Mono', monospace" },
+  { id: 'ibm-plex-mono', name: 'IBM Plex Mono', stack: "'IBM Plex Mono', monospace" },
+  { id: 'anonymous-pro', name: 'Anonymous Pro', stack: "'Anonymous Pro', monospace" },
+  { id: 'victor-mono', name: 'Victor Mono', stack: "'Victor Mono', monospace" },
+  { id: 'fantasque-sans-mono', name: 'Fantasque Sans Mono', stack: "'Fantasque Sans Mono', monospace" },
+  { id: 'monoid', name: 'Monoid', stack: "'Monoid', monospace" },
+  { id: 'fira-mono', name: 'Fira Mono', stack: "'Fira Mono', monospace" },
+  { id: 'cousine', name: 'Cousine', stack: "'Cousine', monospace" },
+  { id: 'oxygen-mono', name: 'Oxygen Mono', stack: "'Oxygen Mono', monospace" },
+  { id: 'space-mono', name: 'Space Mono', stack: "'Space Mono', monospace" },
+  { id: 'cutive-mono', name: 'Cutive Mono', stack: "'Cutive Mono', monospace" },
+  { id: 'nova-mono', name: 'Nova Mono', stack: "'Nova Mono', monospace" },
+  { id: 'overpass-mono', name: 'Overpass Mono', stack: "'Overpass Mono', monospace" },
+  { id: 'share-tech-mono', name: 'Share Tech Mono', stack: "'Share Tech Mono', monospace" },
+  { id: 'major-mono-display', name: 'Major Mono Display', stack: "'Major Mono Display', monospace" },
+  // Premium / niche coding fonts
+  { id: 'input-mono', name: 'Input Mono', stack: "'Input Mono', monospace" },
+  { id: 'dank-mono', name: 'Dank Mono', stack: "'Dank Mono', monospace" },
+  { id: 'operator-mono', name: 'Operator Mono', stack: "'Operator Mono', monospace" },
+  // CJK monospace
+  { id: 'sarasa-mono-sc', name: 'Sarasa Mono SC', stack: "'Sarasa Mono SC', monospace" },
+  { id: 'lxgw-wenkai-mono', name: 'LXGW WenKai Mono', stack: "'LXGW WenKai Mono', monospace" },
+  { id: 'maple-mono', name: 'Maple Mono', stack: "'Maple Mono', monospace" },
 ];
 
 const stylesheetPromises = new Map();
@@ -164,4 +206,50 @@ export function registerCustomFont(spec) {
   }
 
   return fontObject;
+}
+
+export function checkFontByName(fontName) {
+  if (!fontName || typeof fontName !== 'string') return null;
+  const trimmed = fontName.trim();
+  if (!trimmed) return null;
+
+  const available = isFontAvailable(trimmed);
+  if (!available) return null;
+
+  const id = trimmed.toLowerCase().replace(/\s+/g, '-');
+  return {
+    id,
+    name: trimmed,
+    stack: `'${trimmed}', monospace`,
+    cssUrl: null,
+    installed: true,
+  };
+}
+
+function persistFoundFont(font) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(FOUND_FONTS_KEY) || '[]');
+    if (!existing.find(f => f.id === font.id)) {
+      existing.push(font);
+      localStorage.setItem(FOUND_FONTS_KEY, JSON.stringify(existing));
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function registerFoundFont(fontName) {
+  const font = checkFontByName(fontName);
+  if (!font) return null;
+  persistFoundFont(font);
+  return font;
+}
+
+export function restoreFoundFonts() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FOUND_FONTS_KEY) || '[]');
+    return stored.filter(f => f && f.id && f.name);
+  } catch {
+    return [];
+  }
 }

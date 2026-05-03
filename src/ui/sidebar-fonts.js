@@ -94,7 +94,8 @@ function createFontPill(font) {
 }
 
 export function mountFontsSidebar({ container, manifests, installedFonts }) {
-  const allFonts = [...manifests, ...installedFonts];
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const allFonts = [...installedFonts.sort(byName), ...manifests.sort(byName)];
 
   const ul = document.createElement('ul');
   ul.setAttribute('role', 'listbox');

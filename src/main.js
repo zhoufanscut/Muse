@@ -2,7 +2,7 @@
 
 import { getState, subscribe, setCatalog } from './state.js';
 import { getHighlighter } from './themes.js';
-import { loadFontManifests, detectInstalledFonts } from './fonts.js';
+import { loadFontManifests, detectInstalledFonts, restoreFoundFonts } from './fonts.js';
 import { loadLanguageManifests } from './languages.js';
 import { renderPreview } from './preview.js';
 import { mountFontsSidebar, addCustomFontPill } from './ui/sidebar-fonts.js';
@@ -13,7 +13,7 @@ import { mountUploaders, restoreCustom } from './ui/uploaders.js';
 try {
   await getHighlighter();
 
-  const index = await fetch('./data/_index.json').then(r => r.json());
+  const index = await fetch('./data/_index.json', { cache: 'no-store' }).then(r => r.json());
 
   const [fontManifests, langManifests] = await Promise.all([
     loadFontManifests(index.fonts),
@@ -21,7 +21,13 @@ try {
   ]);
 
   const installedFonts = detectInstalledFonts();
-  const allFonts = [...fontManifests, ...installedFonts];
+  const foundFonts = restoreFoundFonts();
+  for (const f of foundFonts) {
+    if (!installedFonts.some(inst => inst.id === f.id)) {
+      installedFonts.push(f);
+    }
+  }
+  const allFonts = [...installedFonts, ...fontManifests];
 
   function rememberFont(font) {
     if (font && !allFonts.some(f => f.id === font.id)) {

@@ -1,4 +1,4 @@
-import { registerCustomFont, installFont } from '../fonts.js';
+import { registerCustomFont, installFont, registerFoundFont } from '../fonts.js';
 import { getHighlighter, markThemeLoaded } from '../themes.js';
 
 const FONT_KEY = 'muse:custom-fonts';
@@ -45,6 +45,82 @@ function createDialog() {
 function showFontDialog({ onFontAdded, onStatus }) {
   const { dialog, title, body, footer } = createDialog();
   title.textContent = 'Add Custom Font';
+
+  const checkSection = document.createElement('details');
+  checkSection.className = 'font-check-section';
+  const checkSummary = document.createElement('summary');
+  checkSummary.textContent = 'Already installed? Check if a font is on your system';
+  checkSection.appendChild(checkSummary);
+
+  const checkInner = document.createElement('div');
+  checkInner.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;';
+
+  const checkInput = document.createElement('input');
+  checkInput.type = 'text';
+  checkInput.placeholder = 'e.g. Fira Code, JetBrains Mono';
+  checkInput.style.cssText = 'flex:1;min-width:180px;';
+  checkInner.appendChild(checkInput);
+
+  const checkBtn = document.createElement('button');
+  checkBtn.textContent = 'Check';
+  checkInner.appendChild(checkBtn);
+
+  const checkResult = document.createElement('div');
+  checkResult.style.cssText = 'width:100%;font-size:0.85rem;min-height:1.5em;margin-top:4px;';
+  checkInner.appendChild(checkResult);
+
+  const addFoundBtn = document.createElement('button');
+  addFoundBtn.textContent = 'Add this font';
+  addFoundBtn.className = 'btn-primary';
+  addFoundBtn.style.display = 'none';
+  addFoundBtn.style.marginTop = '8px';
+  addFoundBtn.style.width = '100%';
+  checkInner.appendChild(addFoundBtn);
+
+  let foundFont = null;
+
+  checkBtn.addEventListener('click', () => {
+    const name = checkInput.value.trim();
+    if (!name) {
+      checkResult.textContent = 'Enter a font name to check.';
+      checkResult.style.color = 'var(--text-muted)';
+      addFoundBtn.style.display = 'none';
+      foundFont = null;
+      return;
+    }
+    const font = registerFoundFont(name);
+    if (font) {
+      checkResult.textContent = `"${font.name}" is installed.`;
+      checkResult.style.color = '#4caf50';
+      addFoundBtn.style.display = '';
+      foundFont = font;
+    } else {
+      checkResult.textContent = `"${name}" not found on this system.`;
+      checkResult.style.color = '#ff8080';
+      addFoundBtn.style.display = 'none';
+      foundFont = null;
+    }
+  });
+
+  checkInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      checkBtn.click();
+    }
+  });
+
+  addFoundBtn.addEventListener('click', () => {
+    if (!foundFont) return;
+    onFontAdded?.(foundFont);
+    dialog.close();
+  });
+
+  checkSection.appendChild(checkInner);
+  body.appendChild(checkSection);
+
+  const separator = document.createElement('hr');
+  separator.style.cssText = 'border:none;border-top:1px solid var(--border);margin:16px 0;';
+  body.appendChild(separator);
 
   const cssLabel = document.createElement('label');
   const cssSpan = document.createElement('span');

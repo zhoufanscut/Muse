@@ -1,5 +1,6 @@
 {
   "fonts": [
+    "anonymous-pro",
     "cascadia-code",
     "fira-code",
     "geist-mono",
@@ -9,7 +10,8 @@
     "iosevka",
     "jetbrains-mono",
     "roboto-mono",
-    "source-code-pro"
+    "source-code-pro",
+    "victor-mono"
   ],
   "themes": [],
   "languages": [
