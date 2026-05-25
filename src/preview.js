@@ -1,8 +1,8 @@
-// muse/preview — preview block renderer with race-condition guard
+// muse/preview — preview block renderer with race-condition guard.
 //
-// Size-only optimization: when only `size` changes and font/theme/lang are unchanged,
-// the caller should update container.style.fontSize directly instead of re-invoking
-// renderPreview. This avoids redundant highlight tokenization for a pure-CSS change.
+// Size-only fast path: the main.js subscriber detects when only `size` changed
+// (font/theme/lang/ligatures/italic unchanged) and calls updateFontSize() — a
+// pure CSS update — instead of re-invoking renderPreview() and re-tokenizing.
 
 import { highlight, ensureLang, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme } from './themes.js';
 import { loadWebFont } from './fonts.js';
@@ -73,27 +73,37 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   });
 }
 
-function applyFontStyles({ container, font, size, ligatures, italic }) {
-  if (!container || !font) return;
-
-  const targets = [
+function previewTargets(container) {
+  return [
     container,
     container.querySelector('.shiki'),
     container.querySelector('.shiki code'),
     container.querySelector('pre'),
     container.querySelector('code'),
   ].filter(Boolean);
+}
 
-  for (const target of targets) {
+function applyFontStyles({ container, font, size, ligatures, italic }) {
+  if (!container || !font) return;
+
+  for (const target of previewTargets(container)) {
     target.style.fontFamily = font.stack;
     target.style.fontSize = size + 'px';
   }
 
   container.classList.toggle('no-liga', !ligatures);
   container.classList.toggle('italic-comments', italic);
+}
 
+// Size-only fast path: update font-size on the rendered nodes, no re-highlight.
+export function updateFontSize(container, size) {
+  if (!container) return;
+  for (const target of previewTargets(container)) {
+    target.style.fontSize = size + 'px';
+  }
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

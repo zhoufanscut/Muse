@@ -1,98 +1,9 @@
 import { getState, setState, subscribe } from '../state.js';
-import { loadWebFont } from '../fonts.js';
+import { loadWebFont, removeCustomFont } from '../fonts.js';
 import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 
-let mountState = null;
-
-function createFontPill(font) {
-  if (!mountState || mountState.entryMap.has(font.id)) return;
-  if (!mountState.allFonts.some(f => f.id === font.id)) {
-    mountState.allFonts.push(font);
-  }
-
-  const li = document.createElement('li');
-  li.className = 'pill';
-  li.setAttribute('role', 'option');
-  li.setAttribute('aria-selected', font.id === getState().font ? 'true' : 'false');
-  li.dataset.fontId = font.id;
-  li.tabIndex = 0;
-  li.style.display = 'flex';
-  li.style.flexDirection = 'column';
-  li.style.alignItems = 'flex-start';
-
-  const topRow = document.createElement('div');
-  topRow.style.display = 'flex';
-  topRow.style.justifyContent = 'space-between';
-  topRow.style.alignItems = 'center';
-  topRow.style.width = '100%';
-
-  const name = document.createElement('span');
-  name.textContent = font.name;
-  name.style.fontWeight = '600';
-
-  const badgeContainer = document.createElement('div');
-  badgeContainer.style.display = 'flex';
-  badgeContainer.style.alignItems = 'center';
-  badgeContainer.style.gap = '6px';
-
-  const isInstalled = font.installed || !font.cssUrl;
-  const typeBadge = document.createElement('span');
-  typeBadge.className = isInstalled ? 'badge-installed' : 'badge-web';
-  typeBadge.textContent = isInstalled ? 'installed' : 'web';
-
-  const statusBadge = document.createElement('span');
-  statusBadge.style.display = 'none';
-
-  badgeContainer.append(statusBadge, typeBadge);
-  topRow.append(name, badgeContainer);
-
-  const preview = document.createElement('div');
-  preview.style.fontFamily = font.stack;
-  preview.style.fontSize = '1.1em';
-  preview.style.opacity = '0.7';
-  preview.style.marginTop = '4px';
-  preview.style.whiteSpace = 'nowrap';
-  preview.style.overflow = 'hidden';
-  preview.style.textOverflow = 'ellipsis';
-  preview.style.width = '100%';
-  preview.textContent = font.name;
-
-  li.append(topRow, preview);
-  mountState.ul.appendChild(li);
-  mountState.entryMap.set(font.id, { li, statusBadge });
-  if (mountState.ul.isConnected) mountState.observer.observe(li);
-
-  const handleSelect = async () => {
-    setState({ font: font.id });
-
-    if (!isInstalled) {
-      statusBadge.style.display = 'inline-block';
-      statusBadge.className = 'spinner';
-      statusBadge.textContent = '';
-
-      const success = await loadWebFont(font);
-
-      statusBadge.className = success ? 'badge-installed' : 'badge-error';
-      statusBadge.textContent = success ? '\u2713' : 'could not load';
-    }
-  };
-
-  li.addEventListener('click', handleSelect);
-
-  li.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleSelect();
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      nextVisiblePill(li)?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      prevVisiblePill(li)?.focus();
-    }
-  });
-}
-
+// State is captured per-mount in this closure (no module singleton) so a second
+// sidebar could be mounted without clobbering the first.
 export function mountFontsSidebar({ container, manifests, installedFonts }) {
   const byName = (a, b) => a.name.localeCompare(b.name);
   const allFonts = [...installedFonts.sort(byName), ...manifests.sort(byName)];
@@ -123,7 +34,7 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
             loadWebFont(font).then(success => {
               statusBadge.className = success ? 'badge-installed' : 'badge-error';
-              statusBadge.textContent = success ? '\u2713' : 'could not load';
+              statusBadge.textContent = success ? '✓' : 'could not load';
             });
           }
         }
@@ -132,31 +43,8 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     }
   }, { root: container, rootMargin: '50px' });
 
-  mountState = { ul, entryMap, container, observer, allFonts };
-
-  const searchWrap = document.createElement('div');
-  searchWrap.className = 'sidebar-search-wrap';
-
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Search fonts\u2026';
-  searchInput.className = 'sidebar-search';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.className = 'sidebar-search-clear';
-  clearBtn.setAttribute('aria-label', 'Clear search');
-  clearBtn.tabIndex = -1;
-  clearBtn.textContent = '\u00d7';
-  clearBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input'));
-    searchInput.focus();
-  });
-
-  searchWrap.append(searchInput, clearBtn);
-  container.appendChild(searchWrap);
-
   let searchQuery = '';
+
   function applyFilter() {
     for (const [id, { li }] of entryMap) {
       const font = allFonts.find(f => f.id === id);
@@ -166,7 +54,138 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
       li.style.display = matches ? '' : 'none';
     }
   }
-  mountState.applyFilter = applyFilter;
+
+  function removeFont(id) {
+    const entry = entryMap.get(id);
+    if (entry) {
+      observer.unobserve(entry.li);
+      entry.li.remove();
+      entryMap.delete(id);
+    }
+    const idx = allFonts.findIndex(f => f.id === id);
+    if (idx >= 0) allFonts.splice(idx, 1);
+    removeCustomFont(id);
+    if (getState().font === id && allFonts[0]) setState({ font: allFonts[0].id });
+  }
+
+  function createFontPill(font) {
+    if (entryMap.has(font.id)) return;
+    if (!allFonts.some(f => f.id === font.id)) allFonts.push(font);
+
+    const li = document.createElement('li');
+    li.className = 'pill';
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', font.id === getState().font ? 'true' : 'false');
+    li.dataset.fontId = font.id;
+    li.tabIndex = 0;
+    li.style.display = 'flex';
+    li.style.flexDirection = 'column';
+    li.style.alignItems = 'flex-start';
+
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.justifyContent = 'space-between';
+    topRow.style.alignItems = 'center';
+    topRow.style.width = '100%';
+
+    const name = document.createElement('span');
+    name.textContent = font.name;
+    name.style.fontWeight = '600';
+
+    const badgeContainer = document.createElement('div');
+    badgeContainer.style.display = 'flex';
+    badgeContainer.style.alignItems = 'center';
+    badgeContainer.style.gap = '6px';
+
+    const isInstalled = font.installed || !font.cssUrl;
+    const typeBadge = document.createElement('span');
+    typeBadge.className = isInstalled ? 'badge-installed' : 'badge-web';
+    typeBadge.textContent = isInstalled ? 'installed' : 'web';
+
+    const statusBadge = document.createElement('span');
+    statusBadge.style.display = 'none';
+
+    badgeContainer.append(statusBadge, typeBadge);
+
+    // Custom uploads (custom- prefix, stored in muse:custom-fonts) are removable.
+    if (font.id.startsWith('custom-')) {
+      badgeContainer.appendChild(createRemoveButton(
+        `Remove custom font "${font.name}"?`,
+        `Remove ${font.name}`,
+        () => removeFont(font.id),
+      ));
+    }
+
+    topRow.append(name, badgeContainer);
+
+    const preview = document.createElement('div');
+    preview.style.fontFamily = font.stack;
+    preview.style.fontSize = '1.1em';
+    preview.style.opacity = '0.7';
+    preview.style.marginTop = '4px';
+    preview.style.whiteSpace = 'nowrap';
+    preview.style.overflow = 'hidden';
+    preview.style.textOverflow = 'ellipsis';
+    preview.style.width = '100%';
+    preview.textContent = font.name;
+
+    li.append(topRow, preview);
+    ul.appendChild(li);
+    entryMap.set(font.id, { li, statusBadge });
+    if (ul.isConnected) observer.observe(li);
+
+    const handleSelect = async () => {
+      setState({ font: font.id });
+
+      if (!isInstalled) {
+        statusBadge.style.display = 'inline-block';
+        statusBadge.className = 'spinner';
+        statusBadge.textContent = '';
+
+        const success = await loadWebFont(font);
+
+        statusBadge.className = success ? 'badge-installed' : 'badge-error';
+        statusBadge.textContent = success ? '✓' : 'could not load';
+      }
+    };
+
+    li.addEventListener('click', handleSelect);
+
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleSelect();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextVisiblePill(li)?.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        prevVisiblePill(li)?.focus();
+      }
+    });
+  }
+
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'sidebar-search-wrap';
+
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search fonts…';
+  searchInput.className = 'sidebar-search';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'sidebar-search-clear';
+  clearBtn.setAttribute('aria-label', 'Clear search');
+  clearBtn.tabIndex = -1;
+  clearBtn.textContent = '×';
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.focus();
+  });
+
+  searchWrap.append(searchInput, clearBtn);
+  container.appendChild(searchWrap);
 
   searchInput.addEventListener('input', () => {
     searchQuery = searchInput.value.trim();
@@ -195,10 +214,27 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
       li.setAttribute('aria-selected', id === state.font ? 'true' : 'false');
     }
   });
+
+  function addCustomFontPill(font) {
+    if (entryMap.has(font.id)) return;
+    createFontPill(font);
+    applyFilter();
+  }
+
+  return { addCustomFontPill };
 }
 
-export function addCustomFontPill(font) {
-  if (!mountState || mountState.entryMap.has(font.id)) return;
-  createFontPill(font);
-  if (mountState.applyFilter) mountState.applyFilter();
+// Small hover-revealed "×" used to delete a runtime-added pill.
+export function createRemoveButton(confirmMsg, ariaLabel, onRemove) {
+  const btn = document.createElement('button');
+  btn.className = 'pill-remove';
+  btn.textContent = '×';
+  btn.title = 'Remove';
+  btn.setAttribute('aria-label', ariaLabel);
+  btn.tabIndex = -1;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm(confirmMsg)) onRemove();
+  });
+  return btn;
 }

@@ -1,3 +1,5 @@
+import { fetchJson } from './util.js';
+
 const LOCAL_STORAGE_KEY = 'muse:custom-fonts';
 const FOUND_FONTS_KEY = 'muse:found-fonts';
 
@@ -145,8 +147,7 @@ export async function loadFontManifests(ids) {
   const results = [];
   for (const id of ids) {
     try {
-      const res = await fetch(`./data/fonts/${id}.json`);
-      const manifest = await res.json();
+      const manifest = await fetchJson(`./data/fonts/${id}.json`);
       results.push(manifest);
     } catch (e) {
       console.error(e);
@@ -161,8 +162,24 @@ export function detectInstalledFonts() {
     .map((f) => ({ ...f, cssUrl: null, installed: true }));
 }
 
+// Keep ONLY @font-face rules from pasted CSS. Constructable stylesheets ignore
+// @import, and every non-@font-face rule (selectors, background hacks) is dropped,
+// so a paste can't smuggle tracking or layout CSS into the page. '' = nothing valid.
+export function sanitizeFontFace(css) {
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    return Array.from(sheet.cssRules)
+      .filter((r) => r instanceof CSSFontFaceRule)
+      .map((r) => r.cssText)
+      .join('\n');
+  } catch {
+    return '';
+  }
+}
+
 export function installFont(spec) {
-  const id = spec.name.toLowerCase().replace(/\s+/g, '-');
+  const id = spec.id || spec.name.toLowerCase().replace(/\s+/g, '-');
   const stack = `'${spec.name}', monospace`;
 
   if (spec.cssUrl) {
@@ -186,13 +203,15 @@ export function installFont(spec) {
     name: spec.name,
     stack,
     cssUrl: spec.cssUrl || null,
-    installed: false,
+    fontFaceCss: spec.fontFaceCss || null,
+    installed: !!spec.installed,
   };
 }
 
 export function registerCustomFont(spec) {
   const fontObject = installFont(spec);
 
+  let persisted = false;
   try {
     const existing = JSON.parse(
       localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'
@@ -201,11 +220,24 @@ export function registerCustomFont(spec) {
       existing.push(fontObject);
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
     }
+    persisted = true;
   } catch (e) {
     console.error(e);
   }
 
-  return fontObject;
+  return { font: fontObject, persisted };
+}
+
+export function removeCustomFont(id) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify(existing.filter(f => f.id !== id))
+    );
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 export function checkFontByName(fontName) {

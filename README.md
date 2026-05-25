@@ -5,7 +5,7 @@ Muse is a static, no-build-step web app that lets visitors live-preview any codi
 ## Using the app
 
 - **Live preview** — pick any font × theme × language combo from the sidebars and tabs.
-- **Randomized on first visit** — opening Muse without a URL hash picks a random font and theme so each landing surfaces something new. Subsequent changes stick via `localStorage`.
+- **Randomized on first visit** — the very first time you open Muse (no saved preferences and no URL hash), it picks a random font and theme so each landing surfaces something new. Once you make a selection it sticks via `localStorage`, even if you later open the bare URL.
 - **Detected fonts** — Muse probes ~40 popular system/coding fonts on your machine (Menlo, Monaco, JetBrains Mono, Fira Code, Iosevka, …) and lists the ones it finds, no CDN needed.
 - **Add your own font (in-browser)** — the "Add Font" dialog accepts a CSS URL *or* an `@font-face` snippet, and can also probe whether a named font is already installed locally. Custom fonts are saved in `localStorage` on this device only.
 - **Add your own theme (in-browser)** — drop a `.json` file or paste any VSCode theme JSON. Stored in `localStorage` on this device only.

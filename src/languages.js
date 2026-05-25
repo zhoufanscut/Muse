@@ -1,3 +1,5 @@
+import { fetchJson, fetchText } from './util.js';
+
 const sampleCache = new Map();
 
 // Malformed JSON dropped silently with console.error — does NOT crash the caller.
@@ -5,8 +7,7 @@ export async function loadLanguageManifests(ids) {
   const results = [];
   for (const id of ids) {
     try {
-      const res = await fetch(`./data/languages/${id}.json`);
-      const manifest = await res.json();
+      const manifest = await fetchJson(`./data/languages/${id}.json`);
       results.push(manifest);
     } catch (e) {
       console.error(e);
@@ -23,8 +24,7 @@ export async function loadSample(manifest) {
     return sampleCache.get(manifest.id);
   }
   try {
-    const res = await fetch('./' + manifest.sample);
-    const text = await res.text();
+    const text = await fetchText('./' + manifest.sample);
     sampleCache.set(manifest.id, text);
     return text;
   } catch (e) {

@@ -13,6 +13,7 @@ index.html  →  src/main.js (boot orchestrator)
                   ├── fonts.js       — CDN font loading, installed-font detection
                   ├── languages.js   — manifest + sample loading, caching
                   ├── preview.js     — render with race-condition guard
+                  ├── util.js        — fetch helpers (HTTP-error-checked JSON/text)
                   ├── style.css      — all styles
                   └── ui/
                       ├── sidebar-fonts.js   — left sidebar pills
@@ -105,6 +106,12 @@ Language manifests store `sample` as a **relative path without `./` prefix** (e.
 
 ### Custom theme slug prefix
 Runtime-uploaded themes get slugs prefixed with `custom-` (see `slugify()` in `src/ui/uploaders.js`). This distinguishes runtime-only themes from repo themes and prevents accidental filename collisions. Repo themes never use this prefix.
+
+### Custom font slug prefix
+Runtime-uploaded fonts (URL or `@font-face` via the dialog) also get `custom-`-prefixed ids — `slugify()` computes the id in `src/ui/uploaders.js` and `installFont` honors `spec.id`. This stops a name like "JetBrains Mono" from shadowing the repo `jetbrains-mono` manifest. System/"found" fonts keep their **real** id (no prefix) so they map to the actually-installed font. Repo fonts never use this prefix.
+
+### Content-Security-Policy
+`index.html` carries a CSP `<meta>`. `script-src` must keep `https://esm.sh` **and** `'wasm-unsafe-eval'`, and `connect-src` must keep `https://esm.sh` — Shiki loads its module and oniguruma WASM from there, and a stricter policy silently breaks highlighting. `style-src`/`font-src` allow any `https:` host so custom fonts from any CDN work; `style-src` needs `'unsafe-inline'` because Shiki emits inline styles. Update the directive list when introducing a new CDN.
 
 ### localStorage keys
 ```

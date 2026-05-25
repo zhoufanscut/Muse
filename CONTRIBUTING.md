@@ -13,6 +13,7 @@ For recipes on crafting good samples and understanding the data format, see [REA
 - [ ] `ligatures` flag set to `true` if the font supports ligatures
 - [ ] Font is legally usable / has `credits` link
 - [ ] `id` matches filename stem
+- [ ] `id` does not start with `custom-` (reserved for in-browser uploads)
 - [ ] `node scripts/rebuild-index.mjs --check` passes
 
 ### New theme PR
@@ -22,6 +23,7 @@ For recipes on crafting good samples and understanding the data format, see [REA
 - [ ] Embedded `name` may differ from filename -- that's fine, filename stem wins
 - [ ] Screenshot of preview attached
 - [ ] `id` (filename stem) doesn't collide with any built-in theme name
+- [ ] `id` does not start with `custom-` (reserved for in-browser uploads)
 - [ ] `node scripts/rebuild-index.mjs --check` passes
 
 ### New language PR

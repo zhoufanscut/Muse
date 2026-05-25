@@ -2,6 +2,11 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <!-- script-src allows esm.sh (Shiki module) + 'wasm-unsafe-eval' (oniguruma WASM);
+       connect-src allows esm.sh for the WASM fetch. style/font-src stay https-wide
+       (no host allowlist) so any https font CDN works; 'unsafe-inline' is required
+       because Shiki emits inline style attributes. Update when adding new CDNs. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; img-src 'self' data:; connect-src 'self' https://esm.sh; base-uri 'self'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Muse — coding font × theme × language</title>
   <link rel="icon" href="./favicon.ico">

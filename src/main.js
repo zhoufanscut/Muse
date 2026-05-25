@@ -2,18 +2,24 @@
 
 import { getState, subscribe, setCatalog } from './state.js';
 import { getHighlighter } from './themes.js';
+import { fetchJson } from './util.js';
 import { loadFontManifests, detectInstalledFonts, restoreFoundFonts } from './fonts.js';
 import { loadLanguageManifests } from './languages.js';
-import { renderPreview } from './preview.js';
-import { mountFontsSidebar, addCustomFontPill } from './ui/sidebar-fonts.js';
-import { mountThemesSidebar, addCustomThemePill } from './ui/sidebar-themes.js';
+import { renderPreview, updateFontSize } from './preview.js';
+import { mountFontsSidebar } from './ui/sidebar-fonts.js';
+import { mountThemesSidebar } from './ui/sidebar-themes.js';
 import { mountControls } from './ui/controls.js';
 import { mountUploaders, restoreCustom } from './ui/uploaders.js';
 
 try {
-  await getHighlighter();
+  // Fetch the built-in theme list once and hand it to the highlighter; later
+  // no-arg getHighlighter() / mountThemesSidebar reuse it instead of re-fetching.
+  const builtinThemeIds = await fetchJson('./data/themes/_builtin.json');
+  const builtinThemes = new Set(builtinThemeIds);
 
-  const index = await fetch('./data/_index.json', { cache: 'no-store' }).then(r => r.json());
+  await getHighlighter(builtinThemeIds);
+
+  const index = await fetchJson('./data/_index.json', { cache: 'no-store' });
 
   const [fontManifests, langManifests] = await Promise.all([
     loadFontManifests(index.fonts),
@@ -35,9 +41,6 @@ try {
     }
     return font;
   }
-
-  const builtinThemeIds = await fetch('./data/themes/_builtin.json').then(r => r.json());
-  const builtinThemes = new Set(builtinThemeIds);
 
   // Read runtime-uploaded ids from localStorage BEFORE setCatalog validates state.
   // Otherwise, state.theme / state.font pointing to a runtime asset gets clobbered
@@ -70,9 +73,9 @@ try {
   const langTabs = document.querySelector('.lang-tabs');
   const previewPane = document.querySelector('.preview-pane');
 
-  mountFontsSidebar({ container: sidebarFonts, manifests: fontManifests, installedFonts });
+  const fontsSidebar = mountFontsSidebar({ container: sidebarFonts, manifests: fontManifests, installedFonts });
 
-  await mountThemesSidebar({ container: sidebarThemes, customThemes: [] });
+  const themesSidebar = await mountThemesSidebar({ container: sidebarThemes, builtinThemes: builtinThemeIds, customThemes: [] });
 
   mountControls({
     controlsBar,
@@ -85,13 +88,13 @@ try {
   mountUploaders({
     addFontBtn: document.getElementById('add-font-btn'),
     addThemeBtn,
-    onFontAdded: (font) => { addCustomFontPill(rememberFont(font)); },
-    onThemeAdded: ({ id }) => { addCustomThemePill(id); },
+    onFontAdded: (font) => { fontsSidebar.addCustomFontPill(rememberFont(font)); },
+    onThemeAdded: ({ id }) => { themesSidebar.addCustomThemePill(id); },
   });
 
   await restoreCustom({
-    onFontAdded: (font) => { addCustomFontPill(rememberFont(font)); },
-    onThemeAdded: ({ id }) => { addCustomThemePill(id); },
+    onFontAdded: (font) => { fontsSidebar.addCustomFontPill(rememberFont(font)); },
+    onThemeAdded: ({ id }) => { themesSidebar.addCustomThemePill(id); },
   });
 
   function currentLangManifest() {
@@ -105,22 +108,41 @@ try {
   }
 
   let booted = false;
+  let prev = null;
+  let rendering = false;
 
   subscribe(async (_state) => {
+    // Size-only fast path: when nothing but `size` changed and no full render is
+    // in flight, update CSS font-size directly instead of re-tokenizing.
+    if (booted && !rendering && prev &&
+        _state.font === prev.font && _state.theme === prev.theme &&
+        _state.lang === prev.lang && _state.ligatures === prev.ligatures &&
+        _state.italic === prev.italic && _state.size !== prev.size) {
+      updateFontSize(previewPane, _state.size);
+      prev = _state;
+      return;
+    }
+    prev = _state;
+
     const font = currentFontManifest();
     const langManifest = currentLangManifest();
 
-    await renderPreview({
-      font,
-      theme: _state.theme,
-      lang: _state.lang,
-      langManifest,
-      size: _state.size,
-      ligatures: _state.ligatures,
-      italic: _state.italic,
-      container: previewPane,
-      builtinThemes,
-    });
+    rendering = true;
+    try {
+      await renderPreview({
+        font,
+        theme: _state.theme,
+        lang: _state.lang,
+        langManifest,
+        size: _state.size,
+        ligatures: _state.ligatures,
+        italic: _state.italic,
+        container: previewPane,
+        builtinThemes,
+      });
+    } finally {
+      rendering = false;
+    }
 
     if (!booted) {
       booted = true;

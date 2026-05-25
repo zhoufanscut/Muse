@@ -1,4 +1,5 @@
 import { createHighlighter } from 'https://esm.sh/shiki@1.24.0';
+import { fetchJson } from './util.js';
 
 let highlighterPromise = null;
 const loadedLangs = new Set();
@@ -14,15 +15,17 @@ const COMMENT_STYLE_SCOPES = [
   'punctuation.definition.comment',
 ];
 
-async function bootstrap() {
-  const builtin = await fetch('./data/themes/_builtin.json').then(r => r.json());
+async function bootstrap(builtinThemes) {
+  const builtin = builtinThemes || await fetchJson('./data/themes/_builtin.json');
   const h = await createHighlighter({ themes: builtin, langs: [] });
   for (const name of builtin) loadedThemes.add(name);
   return h;
 }
 
-export function getHighlighter() {
-  if (!highlighterPromise) highlighterPromise = bootstrap();
+// builtinThemes is passed by the boot orchestrator so _builtin.json is fetched
+// once; later no-arg callers reuse the cached promise.
+export function getHighlighter(builtinThemes) {
+  if (!highlighterPromise) highlighterPromise = bootstrap(builtinThemes);
   return highlighterPromise;
 }
 
@@ -35,7 +38,7 @@ export async function ensureLang(shikiLang) {
 
 export async function ensureCustomTheme(id) {
   if (loadedThemes.has(id)) return;
-  const raw = await fetch(`./data/themes/${id}.json`).then(r => r.json());
+  const raw = await fetchJson(`./data/themes/${id}.json`);
   // CRITICAL: filename stem is canonical. Override the embedded "name" so URL
   // state, localStorage, and Shiki all agree on the same id.
   const theme = { ...raw, name: id };

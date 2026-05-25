@@ -80,6 +80,27 @@ body {
   gap: 6px;
 }
 
+/* Hover-revealed "×" to delete a runtime-added custom font/theme pill. */
+.pill-remove {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.pill:hover .pill-remove,
+.pill:focus-within .pill-remove { display: flex; }
+.pill-remove:hover { color: #ff8080; background: var(--bg-active); }
+
 
 .preview-pane { font-feature-settings: "liga", "calt"; }
 .preview-pane.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
@@ -280,6 +301,22 @@ header h1 {
   max-width: 560px;
   width: 90vw;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Transient toast for font/theme upload feedback (shown via inline display). */
+.upload-status {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 0.85rem;
+  max-width: 380px;
+  z-index: 10000;
+  display: none;
 }
 
 .upload-dialog::backdrop {

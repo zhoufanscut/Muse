@@ -48,6 +48,11 @@ function load() {
   return { ...DEFAULTS, ...(stored || {}), ...(parseHash(location.hash) || {}) };
 }
 
+// Captured before any write so we can tell a genuine first visit (no saved
+// prefs) from a return visit that happens to land on a hashless URL.
+let hadStoredState = false;
+try { hadStoredState = localStorage.getItem(KEY) != null; } catch {}
+
 let state = load();
 
 function validateAgainstCatalog(s) {
@@ -68,11 +73,26 @@ function validateAgainstCatalog(s) {
   return patched;
 }
 
+let persistTimer = null;
+
+function persistNow() {
+  if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (e) { console.error(e); }
+  writeHash(state);
+}
+
+function schedulePersist() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(persistNow, 200);
+}
+
 export function setCatalog(c) {
   catalog = c;
   state = validateAgainstCatalog(state);
 
-  if (!location.hash || location.hash === '#') {
+  if (!hadStoredState && (!location.hash || location.hash === '#')) {
     if (c.fonts && c.fonts.length > 0) {
       state.font = c.fonts[Math.floor(Math.random() * c.fonts.length)];
     }
@@ -81,10 +101,7 @@ export function setCatalog(c) {
     }
   }
 
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch (e) { console.error(e); }
-  writeHash(state);
+  persistNow();
   for (const fn of subs) fn(state);
 }
 
@@ -94,10 +111,10 @@ export function getState() {
 
 export function setState(patch) {
   state = { ...state, ...patch };
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch (e) { console.error(e); }
-  writeHash(state);
+  // Size fires rapidly during slider drags — debounce its persistence. Every
+  // other change persists immediately so a copied URL hash is never stale.
+  if (Object.keys(patch).length === 1 && 'size' in patch) schedulePersist();
+  else persistNow();
   for (const fn of subs) fn(state);
 }
 
