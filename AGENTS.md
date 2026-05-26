@@ -19,7 +19,8 @@ index.html  →  src/main.js (boot orchestrator)
                       ├── sidebar-fonts.js   — left sidebar pills
                       ├── sidebar-themes.js  — right sidebar pills
                       ├── controls.js        — size slider, ligatures, lang tabs
-                      └── uploaders.js       — custom font/theme upload dialogs
+                      ├── uploaders.js       — custom font/theme upload dialogs
+                      └── search.js          — fuzzy scoring + pill navigation
 
 data/
   ├── _index.json          — auto-generated catalog (CI, never edit manually)
@@ -31,6 +32,8 @@ data/
 ```
 
 All imports use relative paths with `./` prefix. All `fetch()` calls use `./` prefix (required for GitHub Pages project sites).
+
+**`_index.json` vs `_builtin.json`**: `_index.json` only lists **repo** fonts/themes/languages by id. Shiki built-in theme names live separately in `data/themes/_builtin.json` (a string array) and are NOT in `_index.json`. The sidebar merges both lists at runtime. When adding a repo theme, ensure the id doesn't collide with any name in `_builtin.json`.
 
 ## Local dev
 
@@ -57,6 +60,8 @@ Adding content is conflict-free by design — you never edit shared files:
 | Language | 2 files | `data/languages/<id>.json` + `data/samples/<id>.txt` |
 
 **Filename stem = canonical id** — used in URL hash, localStorage, and Shiki theme registration. The `id` field inside the JSON **must** match the filename.
+
+For PR contribution checklists (screenshot requirements, sample quality bar, etc.), see `CONTRIBUTING.md`.
 
 ## Critical invariants
 
@@ -160,3 +165,5 @@ const unsub = subscribe((state) => { /* render */ });
 ```
 
 Before `setCatalog()` is called during boot, `setState` does NOT validate against available assets. After boot, invalid font/theme/lang IDs trigger `console.error` and fall back to defaults.
+
+**First-visit randomization**: On the very first visit (no `localStorage` state AND no URL hash), `setCatalog()` picks a random font and theme from the catalog. This is how each new visitor sees a different landing combination. On subsequent visits, the stored or hash-driven selection wins.

@@ -29,8 +29,7 @@ pnpm-debug.log*
 
 # Local agent/runtime state
 .omc/
-.omx/
-.sisyphus/
+.omo/
 .playwright-mcp
 
 # Caches and temporary files
