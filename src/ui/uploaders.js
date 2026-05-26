@@ -69,6 +69,84 @@ function validateThemeColors(theme) {
       || checkRules(theme.settings, 'settings');
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Build a stroke-based inline SVG icon (no external resource; CSP-safe).
+function svgIcon(paths, size = 24) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of paths) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '2');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// A labelled input/textarea field. Returns the wrapper, the control, and the
+// label head row (so callers can append an example button to it).
+function makeField({ label, placeholder = '', multiline = false, rows = 5 }) {
+  const wrap = document.createElement('label');
+  wrap.className = 'field';
+
+  const head = document.createElement('div');
+  head.className = 'field-head';
+  const span = document.createElement('span');
+  span.textContent = label;
+  head.appendChild(span);
+
+  const control = document.createElement(multiline ? 'textarea' : 'input');
+  if (multiline) control.rows = rows;
+  else control.type = 'text';
+  control.placeholder = placeholder;
+
+  wrap.append(head, control);
+  return { wrap, control, head };
+}
+
+function addExampleButton(head, fill) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'dialog-example-btn';
+  btn.textContent = 'Use example';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    fill();
+  });
+  head.appendChild(btn);
+}
+
+function makePanel() {
+  const panel = document.createElement('div');
+  panel.className = 'dialog-panel';
+  panel.setAttribute('role', 'tabpanel');
+  return panel;
+}
+
+// A minimal but valid VSCode theme used by the theme dialog's "Use example".
+const EXAMPLE_THEME_JSON = JSON.stringify({
+  name: 'Example Midnight',
+  type: 'dark',
+  colors: {
+    'editor.background': '#11131a',
+    'editor.foreground': '#e6e6e6',
+  },
+  tokenColors: [
+    { scope: 'comment', settings: { foreground: '#6b7280', fontStyle: 'italic' } },
+    { scope: 'keyword', settings: { foreground: '#c792ea' } },
+    { scope: 'string', settings: { foreground: '#c3e88d' } },
+    { scope: 'function', settings: { foreground: '#82aaff' } },
+  ],
+}, null, 2);
+
 function createDialog() {
   const dialog = document.createElement('dialog');
   dialog.className = 'upload-dialog';
@@ -107,157 +185,196 @@ function showFontDialog({ onFontAdded, onStatus }) {
   const { dialog, title, body, footer } = createDialog();
   title.textContent = 'Add Custom Font';
 
-  const checkSection = document.createElement('details');
-  checkSection.className = 'font-check-section';
-  const checkSummary = document.createElement('summary');
-  checkSummary.textContent = 'Already installed? Check if a font is on your system';
-  checkSection.appendChild(checkSummary);
+  const status = document.createElement('div');
+  status.className = 'dialog-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  const setStatus = (msg, kind) => {
+    status.className = 'dialog-status' + (kind ? ' is-' + kind : '');
+    status.textContent = msg || '';
+  };
 
-  const checkInner = document.createElement('div');
-  checkInner.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;';
+  const TABS = [
+    { id: 'url', label: 'From URL' },
+    { id: 'fontface', label: 'Paste @font-face' },
+    { id: 'installed', label: 'Installed' },
+  ];
 
-  const checkInput = document.createElement('input');
-  checkInput.type = 'text';
-  checkInput.placeholder = 'e.g. Fira Code, JetBrains Mono';
-  checkInput.style.cssText = 'flex:1;min-width:180px;';
-  checkInner.appendChild(checkInput);
+  // ── From URL ──────────────────────────────────────────────
+  const urlPanel = makePanel();
+  const urlField = makeField({
+    label: 'Font CSS URL',
+    placeholder: 'https://fonts.googleapis.com/css2?family=Example&display=swap',
+  });
+  const urlName = makeField({ label: 'Display name', placeholder: 'My Font' });
+  addExampleButton(urlField.head, () => {
+    urlField.control.value = 'https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap';
+    urlName.control.value = 'Roboto Mono';
+    setStatus('', null);
+  });
+  urlPanel.append(urlField.wrap, urlName.wrap);
 
+  // ── Paste @font-face ──────────────────────────────────────
+  const ffPanel = makePanel();
+  const ffField = makeField({
+    label: '@font-face CSS',
+    placeholder: '@font-face {\n  font-family: "My Font";\n  src: url("https://.../my-font.woff2") format("woff2");\n}',
+    multiline: true,
+    rows: 6,
+  });
+  const ffName = makeField({ label: 'Display name', placeholder: 'My Font' });
+  addExampleButton(ffField.head, () => {
+    ffField.control.value = '@font-face {\n  font-family: "Example Mono";\n  font-weight: 400;\n  font-style: normal;\n  src: url("https://example.com/fonts/example-mono.woff2") format("woff2");\n}';
+    ffName.control.value = 'Example Mono';
+    setStatus('', null);
+  });
+  ffPanel.append(ffField.wrap, ffName.wrap);
+
+  // ── Already installed ─────────────────────────────────────
+  const instPanel = makePanel();
+  const instField = makeField({ label: 'Font name', placeholder: 'e.g. Fira Code, JetBrains Mono' });
+  const instActions = document.createElement('div');
+  instActions.className = 'field-actions';
   const checkBtn = document.createElement('button');
+  checkBtn.type = 'button';
+  checkBtn.className = 'btn-secondary';
   checkBtn.textContent = 'Check';
-  checkInner.appendChild(checkBtn);
-
-  const checkResult = document.createElement('div');
-  checkResult.style.cssText = 'width:100%;font-size:0.85rem;min-height:1.5em;margin-top:4px;';
-  checkInner.appendChild(checkResult);
-
   const addFoundBtn = document.createElement('button');
-  addFoundBtn.textContent = 'Add this font';
+  addFoundBtn.type = 'button';
   addFoundBtn.className = 'btn-primary';
-  addFoundBtn.style.display = 'none';
-  addFoundBtn.style.marginTop = '8px';
-  addFoundBtn.style.width = '100%';
-  checkInner.appendChild(addFoundBtn);
+  addFoundBtn.textContent = 'Add this font';
+  addFoundBtn.hidden = true;
+  instActions.append(checkBtn, addFoundBtn);
+  instPanel.append(instField.wrap, instActions);
 
   let foundFont = null;
-
-  checkBtn.addEventListener('click', () => {
-    const name = checkInput.value.trim();
+  const runCheck = () => {
+    const name = instField.control.value.trim();
     if (!name) {
-      checkResult.textContent = 'Enter a font name to check.';
-      checkResult.style.color = 'var(--text-muted)';
-      addFoundBtn.style.display = 'none';
+      setStatus('Enter a font name to check.', 'error');
+      addFoundBtn.hidden = true;
       foundFont = null;
       return;
     }
     const font = registerFoundFont(name);
     if (font) {
-      checkResult.textContent = `"${font.name}" is installed.`;
-      checkResult.style.color = '#4caf50';
-      addFoundBtn.style.display = '';
+      setStatus(`"${font.name}" is installed on this system.`, 'success');
+      addFoundBtn.hidden = false;
       foundFont = font;
+      addFoundBtn.focus();
     } else {
-      checkResult.textContent = `"${name}" not found on this system.`;
-      checkResult.style.color = '#ff8080';
-      addFoundBtn.style.display = 'none';
+      setStatus(`"${name}" was not found on this system.`, 'error');
+      addFoundBtn.hidden = true;
       foundFont = null;
     }
+  };
+  checkBtn.addEventListener('click', runCheck);
+  instField.control.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); runCheck(); }
   });
-
-  checkInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      checkBtn.click();
-    }
-  });
-
   addFoundBtn.addEventListener('click', () => {
     if (!foundFont) return;
     onFontAdded?.(foundFont);
     dialog.close();
   });
 
-  checkSection.appendChild(checkInner);
-  body.appendChild(checkSection);
+  const panels = { url: urlPanel, fontface: ffPanel, installed: instPanel };
 
-  const separator = document.createElement('hr');
-  separator.style.cssText = 'border:none;border-top:1px solid var(--border);margin:16px 0;';
-  body.appendChild(separator);
-
-  const cssLabel = document.createElement('label');
-  const cssSpan = document.createElement('span');
-  cssSpan.textContent = 'Font CSS URL or @font-face snippet';
-  cssLabel.appendChild(cssSpan);
-  const cssInput = document.createElement('textarea');
-  cssInput.placeholder = 'https://fonts.googleapis.com/css2?family=Example&display=swap\n\n— or —\n\n@font-face {\n  font-family: "Example";\n  src: url("...");\n}';
-  cssInput.rows = 5;
-  cssLabel.appendChild(cssInput);
-  body.appendChild(cssLabel);
-
-  const nameLabel = document.createElement('label');
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = 'Display name';
-  nameLabel.appendChild(nameSpan);
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.placeholder = 'My Font';
-  nameLabel.appendChild(nameInput);
-  body.appendChild(nameLabel);
-
+  // ── Footer ────────────────────────────────────────────────
   const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn-secondary';
   cancelBtn.textContent = 'Cancel';
   cancelBtn.addEventListener('click', () => dialog.close());
-  footer.appendChild(cancelBtn);
 
   const submitBtn = document.createElement('button');
+  submitBtn.type = 'button';
   submitBtn.className = 'btn-primary';
-  submitBtn.textContent = 'Add Font';
-  submitBtn.addEventListener('click', () => {
-    const input = cssInput.value.trim();
-    const name = nameInput.value.trim();
+  submitBtn.textContent = 'Add font';
+  footer.append(cancelBtn, submitBtn);
 
-    if (!input) {
-      onStatus?.('Please enter a font URL or @font-face CSS.');
-      return;
-    }
-    if (!name) {
-      onStatus?.('Please enter a display name.');
-      return;
-    }
+  // ── Segmented control ─────────────────────────────────────
+  const segments = document.createElement('div');
+  segments.className = 'dialog-segments';
+  segments.setAttribute('role', 'tablist');
+  const segBtns = {};
 
-    let spec;
-    if (input.includes('@font-face')) {
-      const safe = sanitizeFontFace(input);
-      if (!safe) {
-        onStatus?.('No usable @font-face rule found in the pasted CSS.');
-        return;
-      }
-      spec = { name, fontFaceCss: safe };
-    } else {
-      if (!/^https:\/\//i.test(input)) {
-        onStatus?.('Font URL must start with https:// (got an http or non-URL value).');
-        return;
-      }
-      spec = { name, cssUrl: input };
+  let active = null;
+  const activate = (id) => {
+    if (id === active) return;
+    active = id;
+    for (const t of TABS) {
+      segBtns[t.id].setAttribute('aria-selected', t.id === id ? 'true' : 'false');
+      panels[t.id].hidden = t.id !== id;
     }
+    // The Installed panel manages its own Check → "Add this font" two-step.
+    submitBtn.hidden = id === 'installed';
+    addFoundBtn.hidden = true;
+    foundFont = null;
+    setStatus('', null);
+  };
+
+  for (const t of TABS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dialog-segment';
+    b.textContent = t.label;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false');
+    b.addEventListener('click', () => activate(t.id));
+    segBtns[t.id] = b;
+    segments.appendChild(b);
+  }
+
+  const finishAdd = (spec) => {
     // custom- prefix so a name like "JetBrains Mono" can't shadow a repo font id.
-    spec.id = slugify(name);
-
+    spec.id = slugify(spec.name);
+    let result;
     try {
-      const { font, persisted } = registerCustomFont(spec); // single writer
-      onFontAdded?.(font);
-      dialog.close();
-      onStatus?.(persisted
-        ? 'Font added. Note: Custom fonts are stored locally and will fall back to defaults if this URL is shared to another device.'
-        : 'Font added for this session, but it could not be saved (browser storage may be full).');
+      result = registerCustomFont(spec); // single writer
     } catch (e) {
-      onStatus?.('Failed to register font: ' + e.message);
+      setStatus('Failed to register font: ' + e.message, 'error');
+      return;
+    }
+    onFontAdded?.(result.font);
+    setStatus(result.persisted ? 'Font added ✓' : 'Font added for this session (could not save to local storage).', 'success');
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    const closeTimer = setTimeout(() => {
+      dialog.close();
+      if (result.persisted) {
+        onStatus?.('Custom fonts are stored locally and will fall back to defaults if this URL is shared to another device.');
+      }
+    }, 900);
+    // Cancel the deferred close+toast if the user dismisses the dialog first.
+    dialog.addEventListener('close', () => clearTimeout(closeTimer), { once: true });
+  };
+
+  submitBtn.addEventListener('click', () => {
+    if (active === 'url') {
+      const url = urlField.control.value.trim();
+      const name = urlName.control.value.trim();
+      if (!url) return setStatus('Please enter a font CSS URL.', 'error');
+      if (!/^https:\/\//i.test(url)) return setStatus('Font URL must start with https://', 'error');
+      if (!name) return setStatus('Please enter a display name.', 'error');
+      finishAdd({ name, cssUrl: url });
+    } else if (active === 'fontface') {
+      const css = ffField.control.value.trim();
+      const name = ffName.control.value.trim();
+      if (!css) return setStatus('Please paste an @font-face rule.', 'error');
+      const safe = sanitizeFontFace(css);
+      if (!safe) return setStatus('No usable @font-face rule found in the pasted CSS.', 'error');
+      if (!name) return setStatus('Please enter a display name.', 'error');
+      finishAdd({ name, fontFaceCss: safe });
     }
   });
-  footer.appendChild(submitBtn);
+
+  body.append(segments, urlPanel, ffPanel, instPanel, status);
+  activate('url');
 
   document.body.appendChild(dialog);
   dialog.showModal();
-  cssInput.focus();
+  urlField.control.focus();
 
   dialog.addEventListener('close', () => dialog.remove());
 }
@@ -266,20 +383,44 @@ function showThemeDialog({ onThemeAdded, onStatus }) {
   const { dialog, title, body, footer } = createDialog();
   title.textContent = 'Add Custom Theme';
 
+  const status = document.createElement('div');
+  status.className = 'dialog-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  const setStatus = (msg, kind) => {
+    status.className = 'dialog-status' + (kind ? ' is-' + kind : '');
+    status.textContent = msg || '';
+  };
+
   const dropZone = document.createElement('div');
   dropZone.className = 'drop-zone';
-  dropZone.textContent = 'Drop a .json theme file here, or paste JSON below';
+  const dropIcon = document.createElement('div');
+  dropIcon.className = 'drop-zone-icon';
+  dropIcon.appendChild(svgIcon(['M12 3v12', 'M7.5 10.5 12 15l4.5-4.5', 'M5 20h14'], 30));
+  const dropText = document.createElement('div');
+  dropText.textContent = 'Drop a .json theme file here, or click to browse';
+  dropZone.append(dropIcon, dropText);
   body.appendChild(dropZone);
 
-  const jsonLabel = document.createElement('label');
-  const jsonSpan = document.createElement('span');
-  jsonSpan.textContent = 'Theme JSON';
-  jsonLabel.appendChild(jsonSpan);
-  const jsonInput = document.createElement('textarea');
-  jsonInput.placeholder = 'Paste VSCode theme JSON here…';
-  jsonInput.rows = 8;
-  jsonLabel.appendChild(jsonInput);
-  body.appendChild(jsonLabel);
+  const jsonField = makeField({ label: 'Theme JSON', placeholder: 'Paste VSCode theme JSON here…', multiline: true, rows: 8 });
+  const jsonInput = jsonField.control;
+  addExampleButton(jsonField.head, () => {
+    jsonInput.value = EXAMPLE_THEME_JSON;
+    setStatus('', null);
+  });
+  body.appendChild(jsonField.wrap);
+
+  const readFile = (file) => {
+    if (!file) return;
+    if (!file.name.endsWith('.json')) {
+      setStatus('Only .json files are accepted.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => { jsonInput.value = reader.result; setStatus('', null); };
+    reader.onerror = () => setStatus('Failed to read file.', 'error');
+    reader.readAsText(file);
+  };
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -291,82 +432,70 @@ function showThemeDialog({ onThemeAdded, onStatus }) {
   dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    const file = e.dataTransfer?.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith('.json')) {
-      onStatus?.('Only .json files are accepted.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      jsonInput.value = reader.result;
-    };
-    reader.onerror = () => {
-      onStatus?.('Failed to read file.');
-    };
-    reader.readAsText(file);
+    readFile(e.dataTransfer?.files?.[0]);
   });
   dropZone.addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        jsonInput.value = reader.result;
-      };
-      reader.readAsText(file);
-    });
+    input.addEventListener('change', () => readFile(input.files?.[0]));
     input.click();
   });
 
   const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn-secondary';
   cancelBtn.textContent = 'Cancel';
   cancelBtn.addEventListener('click', () => dialog.close());
-  footer.appendChild(cancelBtn);
 
   const submitBtn = document.createElement('button');
+  submitBtn.type = 'button';
   submitBtn.className = 'btn-primary';
-  submitBtn.textContent = 'Add Theme';
+  submitBtn.textContent = 'Add theme';
   submitBtn.addEventListener('click', () => {
     const json = jsonInput.value.trim();
-    if (!json) {
-      onStatus?.('Please paste or drop a theme JSON file.');
-      return;
-    }
-    try {
-      const theme = JSON.parse(json);
-      if (!theme.colors && !theme.tokenColors && !theme.settings) {
-        onStatus?.('Not a valid VSCode theme: missing colors, tokenColors, or settings.');
-        return;
-      }
-      const colorErr = validateThemeColors(theme);
-      if (colorErr) {
-        onStatus?.('Theme rejected — ' + colorErr);
-        return;
-      }
-      const id = slugify(theme.name || 'unnamed');
+    if (!json) return setStatus('Please paste or drop a theme JSON file.', 'error');
 
-      const persisted = storeCustomTheme(id, theme);
-      registerRuntimeTheme(id, theme).then(() => {
-        onThemeAdded?.({ id, name: theme.name || id, type: theme.type || 'dark' });
-        dialog.close();
-        onStatus?.(persisted
-          ? 'Theme added. Note: Custom themes are stored locally and will fall back to defaults if this URL is shared to another device.'
-          : 'Theme added for this session, but it could not be saved (browser storage may be full).');
-      }).catch(e => {
-        onStatus?.('Failed to load theme: ' + e.message);
-      });
+    let theme;
+    try {
+      theme = JSON.parse(json);
     } catch (e) {
-      onStatus?.('Invalid JSON: ' + e.message);
+      return setStatus('Invalid JSON: ' + e.message, 'error');
     }
+    if (!theme.colors && !theme.tokenColors && !theme.settings) {
+      return setStatus('Not a valid VSCode theme: missing colors, tokenColors, or settings.', 'error');
+    }
+    const colorErr = validateThemeColors(theme);
+    if (colorErr) return setStatus('Theme rejected — ' + colorErr, 'error');
+
+    const id = slugify(theme.name || 'unnamed');
+    const persisted = storeCustomTheme(id, theme);
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    registerRuntimeTheme(id, theme).then(() => {
+      onThemeAdded?.({ id, name: theme.name || id, type: theme.type || 'dark' });
+      setStatus(persisted ? 'Theme added ✓' : 'Theme added for this session (could not save to local storage).', 'success');
+      const closeTimer = setTimeout(() => {
+        dialog.close();
+        if (persisted) {
+          onStatus?.('Custom themes are stored locally and will fall back to defaults if this URL is shared to another device.');
+        }
+      }, 900);
+      // Cancel the deferred close+toast if the user dismisses the dialog first.
+      dialog.addEventListener('close', () => clearTimeout(closeTimer), { once: true });
+    }).catch(e => {
+      submitBtn.disabled = false;
+      cancelBtn.disabled = false;
+      setStatus('Failed to load theme: ' + e.message, 'error');
+    });
   });
-  footer.appendChild(submitBtn);
+  footer.append(cancelBtn, submitBtn);
+
+  body.appendChild(status);
 
   document.body.appendChild(dialog);
   dialog.showModal();
+  jsonInput.focus();
 
   dialog.addEventListener('close', () => dialog.remove());
 }

@@ -200,14 +200,18 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   }
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'pill';
-  addBtn.textContent = '+ Add font';
+  addBtn.className = 'sidebar-add-btn';
   addBtn.id = 'add-font-btn';
-  addBtn.style.marginTop = '16px';
-  addBtn.style.width = '100%';
-  addBtn.style.justifyContent = 'center';
+  const addIcon = document.createElement('span');
+  addIcon.className = 'add-btn-icon';
+  addIcon.textContent = '+';
+  addIcon.setAttribute('aria-hidden', 'true');
+  addBtn.append(addIcon, document.createTextNode('Add font'));
 
-  container.appendChild(addBtn);
+  const addWrap = document.createElement('div');
+  addWrap.className = 'sidebar-add-wrap';
+  addWrap.appendChild(addBtn);
+  container.appendChild(addWrap);
 
   subscribe((state) => {
     for (const [id, { li }] of entryMap) {

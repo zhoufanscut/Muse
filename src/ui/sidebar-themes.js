@@ -201,12 +201,18 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
   container.appendChild(ul);
 
   const addButton = document.createElement('button');
-  addButton.className = 'pill';
+  addButton.className = 'sidebar-add-btn';
   addButton.id = 'add-theme-btn';
-  addButton.style.marginTop = '16px';
-  addButton.style.justifyContent = 'center';
-  addButton.textContent = '+ Add theme';
-  container.appendChild(addButton);
+  const addThemeIcon = document.createElement('span');
+  addThemeIcon.className = 'add-btn-icon';
+  addThemeIcon.textContent = '+';
+  addThemeIcon.setAttribute('aria-hidden', 'true');
+  addButton.append(addThemeIcon, document.createTextNode('Add theme'));
+
+  const addWrap = document.createElement('div');
+  addWrap.className = 'sidebar-add-wrap';
+  addWrap.appendChild(addButton);
+  container.appendChild(addWrap);
 
   subscribe((state) => {
     for (const [id, pill] of pills.entries()) {
