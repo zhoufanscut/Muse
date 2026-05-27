@@ -27,11 +27,16 @@ try {
   ]);
 
   const installedFonts = detectInstalledFonts();
+  const manifestIds = new Set(fontManifests.map(f => f.id));
   const foundFonts = restoreFoundFonts();
   for (const f of foundFonts) {
-    if (!installedFonts.some(inst => inst.id === f.id)) {
-      installedFonts.push(f);
-    }
+    // A found font is only "user-added" (removable) when no shipped source
+    // already covers its id: not auto-detected from the hardcoded probe list,
+    // and not a repo manifest. A shipped match supplies its own non-removable
+    // pill and reappears on reload regardless, so a removable found-shadow would
+    // both violate "shipped fonts stay" and be pointless to delete.
+    if (installedFonts.some(inst => inst.id === f.id) || manifestIds.has(f.id)) continue;
+    installedFonts.push({ ...f, userAdded: true });
   }
   const allFonts = [...installedFonts, ...fontManifests];
 

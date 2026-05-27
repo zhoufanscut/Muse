@@ -285,3 +285,15 @@ export function restoreFoundFonts() {
     return [];
   }
 }
+
+export function removeFoundFont(id) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(FOUND_FONTS_KEY) || '[]');
+    localStorage.setItem(
+      FOUND_FONTS_KEY,
+      JSON.stringify(existing.filter(f => f.id !== id))
+    );
+  } catch (e) {
+    console.error(e);
+  }
+}

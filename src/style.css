@@ -80,7 +80,8 @@ body {
   gap: 6px;
 }
 
-/* Hover-revealed "×" to delete a runtime-added custom font/theme pill. */
+/* "×" to delete a user-added font/theme pill: revealed on hover/focus for
+   pointer devices, always shown on touch (see the media query below). */
 .pill-remove {
   display: none;
   align-items: center;
@@ -100,6 +101,12 @@ body {
 .pill:hover .pill-remove,
 .pill:focus-within .pill-remove { display: flex; }
 .pill-remove:hover { color: #ff8080; background: var(--bg-active); }
+/* The hover-reveal above never fires on touch. Cover touch-only devices
+   (hover:none) AND hybrids with a touch screen plus a mouse (any-pointer:coarse)
+   so the × is reachable whenever a finger is a possible input. */
+@media (hover: none), (any-pointer: coarse) {
+  .pill-remove { display: flex; }
+}
 
 
 .preview-pane { font-feature-settings: "liga", "calt"; }

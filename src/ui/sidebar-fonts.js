@@ -1,5 +1,5 @@
 import { getState, setState, subscribe } from '../state.js';
-import { loadWebFont, removeCustomFont } from '../fonts.js';
+import { loadWebFont, removeCustomFont, removeFoundFont } from '../fonts.js';
 import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 
 // State is captured per-mount in this closure (no module singleton) so a second
@@ -64,7 +64,10 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     }
     const idx = allFonts.findIndex(f => f.id === id);
     if (idx >= 0) allFonts.splice(idx, 1);
-    removeCustomFont(id);
+    // custom- uploads live in muse:custom-fonts; user-added installed fonts in
+    // muse:found-fonts. Route to the right store so removal actually persists.
+    if (id.startsWith('custom-')) removeCustomFont(id);
+    else removeFoundFont(id);
     if (getState().font === id && allFonts[0]) setState({ font: allFonts[0].id });
   }
 
@@ -107,10 +110,12 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
     badgeContainer.append(statusBadge, typeBadge);
 
-    // Custom uploads (custom- prefix, stored in muse:custom-fonts) are removable.
-    if (font.id.startsWith('custom-')) {
+    // Anything the user added is removable: custom- uploads (muse:custom-fonts)
+    // and fonts added via the Installed tab (muse:found-fonts, flagged userAdded).
+    // Repo fonts and auto-detected system fonts are not.
+    if (font.id.startsWith('custom-') || font.userAdded) {
       badgeContainer.appendChild(createRemoveButton(
-        `Remove custom font "${font.name}"?`,
+        `Remove "${font.name}" from your fonts?`,
         `Remove ${font.name}`,
         () => removeFont(font.id),
       ));
@@ -228,7 +233,8 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   return { addCustomFontPill };
 }
 
-// Small hover-revealed "×" used to delete a runtime-added pill.
+// Small "×" used to delete a user-added pill (hover/focus-revealed on pointer
+// devices, always shown on touch — see .pill-remove in style.css).
 export function createRemoveButton(confirmMsg, ariaLabel, onRemove) {
   const btn = document.createElement('button');
   btn.className = 'pill-remove';
