@@ -1,5 +1,5 @@
 import { getState, setState, subscribe } from '../state.js';
-import { getKnownTheme, ensureCustomTheme } from '../themes.js';
+import { getKnownTheme, ensureCustomTheme, isThemeLoaded } from '../themes.js';
 import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 import { fetchJson } from '../util.js';
 import { createRemoveButton } from './sidebar-fonts.js';
@@ -129,7 +129,7 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     // Load theme data asynchronously
     (async () => {
       try {
-        if (isCustom) {
+        if (isCustom || !isThemeLoaded(id)) {
           await ensureCustomTheme(id);
         }
         const theme = await getKnownTheme(id);

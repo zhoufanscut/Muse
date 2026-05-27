@@ -80,7 +80,7 @@ try {
 
   const fontsSidebar = mountFontsSidebar({ container: sidebarFonts, manifests: fontManifests, installedFonts });
 
-  const themesSidebar = await mountThemesSidebar({ container: sidebarThemes, builtinThemes: builtinThemeIds, customThemes: [] });
+  const themesSidebar = await mountThemesSidebar({ container: sidebarThemes, builtinThemes: [...builtinThemeIds, ...index.themes], customThemes: [] });
 
   mountControls({
     controlsBar,
