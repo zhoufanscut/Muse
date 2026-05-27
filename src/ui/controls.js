@@ -1,6 +1,6 @@
 import { getState, setState, subscribe } from '../state.js';
 
-export function mountControls({ controlsBar, langTabsContainer, langManifests }) {
+export function mountControls({ controlsBar, langTabsContainer, langManifests, onExport }) {
   const state = getState();
   
   const sizeLabel = document.createElement('label');
@@ -38,6 +38,16 @@ export function mountControls({ controlsBar, langTabsContainer, langManifests })
   italicLabel.prepend(italicCheck);
   
   controlsBar.append(sizeLabel, ligaLabel, italicLabel);
+
+  if (onExport) {
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'export-btn';
+    exportBtn.textContent = 'Export';
+    exportBtn.title = 'Use this font + theme in VS Code';
+    exportBtn.addEventListener('click', onExport);
+    controlsBar.appendChild(exportBtn);
+  }
   
   const tabMap = new Map();
   for (const manifest of langManifests) {

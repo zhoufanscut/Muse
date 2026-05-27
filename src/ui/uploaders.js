@@ -1,5 +1,6 @@
 import { registerCustomFont, installFont, registerFoundFont, sanitizeFontFace } from '../fonts.js';
 import { getHighlighter, markThemeLoaded } from '../themes.js';
+import { createDialog, svgIcon } from './dialog.js';
 
 const FONT_KEY = 'muse:custom-fonts';
 const THEME_KEY = 'muse:custom-themes';
@@ -69,28 +70,6 @@ function validateThemeColors(theme) {
       || checkRules(theme.settings, 'settings');
 }
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-// Build a stroke-based inline SVG icon (no external resource; CSP-safe).
-function svgIcon(paths, size = 24) {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const d of paths) {
-    const p = document.createElementNS(SVG_NS, 'path');
-    p.setAttribute('d', d);
-    p.setAttribute('stroke', 'currentColor');
-    p.setAttribute('stroke-width', '2');
-    p.setAttribute('stroke-linecap', 'round');
-    p.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(p);
-  }
-  return svg;
-}
-
 // A labelled input/textarea field. Returns the wrapper, the control, and the
 // label head row (so callers can append an example button to it).
 function makeField({ label, placeholder = '', multiline = false, rows = 5 }) {
@@ -146,40 +125,6 @@ const EXAMPLE_THEME_JSON = JSON.stringify({
     { scope: 'function', settings: { foreground: '#82aaff' } },
   ],
 }, null, 2);
-
-function createDialog() {
-  const dialog = document.createElement('dialog');
-  dialog.className = 'upload-dialog';
-
-  const header = document.createElement('div');
-  header.className = 'upload-dialog-header';
-
-  const title = document.createElement('h2');
-  header.appendChild(title);
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'upload-dialog-close';
-  closeBtn.textContent = '\u00d7';
-  closeBtn.setAttribute('aria-label', 'Close');
-  closeBtn.addEventListener('click', () => dialog.close());
-  header.appendChild(closeBtn);
-
-  const body = document.createElement('div');
-  body.className = 'upload-dialog-body';
-
-  const footer = document.createElement('div');
-  footer.className = 'upload-dialog-footer';
-
-  dialog.appendChild(header);
-  dialog.appendChild(body);
-  dialog.appendChild(footer);
-
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) dialog.close();
-  });
-
-  return { dialog, title, body, footer };
-}
 
 function showFontDialog({ onFontAdded, onStatus }) {
   const { dialog, title, body, footer } = createDialog();

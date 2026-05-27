@@ -1,0 +1,60 @@
+// Shared modal-dialog primitives used by the uploader and export dialogs.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Build a stroke-based inline SVG icon (no external resource; CSP-safe).
+export function svgIcon(paths, size = 24) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of paths) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '2');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// A modal <dialog> with header (title + close), scrollable body, and footer.
+// Closes on backdrop click. Caller appends content to body/footer and calls
+// dialog.showModal(); remove-on-close is the caller's responsibility.
+export function createDialog() {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'upload-dialog';
+
+  const header = document.createElement('div');
+  header.className = 'upload-dialog-header';
+
+  const title = document.createElement('h2');
+  header.appendChild(title);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'upload-dialog-close';
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.addEventListener('click', () => dialog.close());
+  header.appendChild(closeBtn);
+
+  const body = document.createElement('div');
+  body.className = 'upload-dialog-body';
+
+  const footer = document.createElement('div');
+  footer.className = 'upload-dialog-footer';
+
+  dialog.appendChild(header);
+  dialog.appendChild(body);
+  dialog.appendChild(footer);
+
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+
+  return { dialog, title, body, footer };
+}

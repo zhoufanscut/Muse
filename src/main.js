@@ -1,7 +1,7 @@
 // muse/main — boot orchestrator
 
 import { getState, subscribe, setCatalog } from './state.js';
-import { getHighlighter } from './themes.js';
+import { getHighlighter, getKnownTheme } from './themes.js';
 import { fetchJson } from './util.js';
 import { loadFontManifests, detectInstalledFonts, restoreFoundFonts } from './fonts.js';
 import { loadLanguageManifests } from './languages.js';
@@ -9,7 +9,8 @@ import { renderPreview, updateFontSize } from './preview.js';
 import { mountFontsSidebar } from './ui/sidebar-fonts.js';
 import { mountThemesSidebar } from './ui/sidebar-themes.js';
 import { mountControls } from './ui/controls.js';
-import { mountUploaders, restoreCustom } from './ui/uploaders.js';
+import { mountUploaders, restoreCustom, getRuntimeTheme } from './ui/uploaders.js';
+import { showExportDialog } from './ui/export.js';
 
 try {
   // Fetch the built-in theme list once and hand it to the highlighter; later
@@ -86,6 +87,11 @@ try {
     controlsBar,
     langTabsContainer: langTabs,
     langManifests,
+    onExport: () => showExportDialog({
+      font: currentFontManifest(),
+      state: getState(),
+      resolveThemeJson,
+    }),
   });
 
   const addThemeBtn = document.getElementById('add-theme-btn');
@@ -110,6 +116,17 @@ try {
   function currentFontManifest() {
     const state = getState();
     return allFonts.find(f => f.id === state.font) || allFonts[0];
+  }
+
+  // Best available source for a theme's JSON: a runtime upload, the original
+  // repo file (highest fidelity), or Shiki's normalized built-in.
+  async function resolveThemeJson(id) {
+    const runtime = getRuntimeTheme(id);
+    if (runtime) return runtime;
+    if (index.themes.includes(id)) {
+      try { return await fetchJson(`./data/themes/${id}.json`); } catch (e) { console.error(e); }
+    }
+    return getKnownTheme(id);
   }
 
   let booted = false;

@@ -304,9 +304,16 @@ header h1 {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 0;
+  /* Center in the viewport regardless of UA quirks: definite width + auto side
+     margins center horizontally; fit-content height + top/bottom 0 + auto
+     margins center vertically. Independent of the transform-based open anim. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
   min-width: 420px;
   max-width: 560px;
   width: 90vw;
+  height: fit-content;
   max-height: 90vh;
   overflow: hidden;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
@@ -652,3 +659,124 @@ header h1 {
   font-weight: 400;
   line-height: 1;
 }
+
+/* ── Export ("Use this setup in VS Code") ──────────────────── */
+
+.export-btn {
+  margin-left: auto;
+  padding: 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+.export-btn:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.export-btn:active { transform: translateY(1px); }
+.export-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.export-intro {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.export-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-theme-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-note {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.export-note a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.export-note a:hover { color: var(--accent-hover); }
+.export-note.is-ok { color: #87e3ad; }
+
+.export-code {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.export-code pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.export-code code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre;
+}
+.export-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.export-copy-btn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--bg-active);
+}
+.export-copy-btn.is-copied {
+  color: #87e3ad;
+  border-color: rgba(128, 255, 176, 0.35);
+}
+.export-copy-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.export-download-btn { align-self: flex-start; }
+
+.export-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.export-steps li { padding-left: 2px; }
