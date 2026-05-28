@@ -1,41 +1,25 @@
 # Contributing
 
-Thanks for considering a contribution to Muse. This document covers the PR process for adding fonts, themes, and languages.
+Muse is a toy I built for fun, so please read this as "here's how, if you feel like it" rather than a process to follow. There's no roadmap and no obligation. If you add a font, theme, or language you like, I'd be glad to see a PR — and just as glad if you fork it and keep the changes to yourself.
 
-For recipes on crafting good samples and understanding the data format, see [README.md](README.md).
+The nice part of the data layout: every contribution is a new file in `data/`. You never edit shared files, so PRs basically can't conflict.
 
-## PR checklists
+## The gist
 
-### New font PR
+**Font** — add `data/fonts/<id>.json`. Check that the `cssUrl` actually loads (try it in a private window), that the `id` matches the filename, and that the font is something you're allowed to share (a `credits` link is nice).
 
-- [ ] One file added: `data/fonts/<id>.json`
-- [ ] `cssUrl` works in incognito (verify by opening in a private window)
-- [ ] `ligatures` flag set to `true` if the font supports ligatures
-- [ ] Font is legally usable / has `credits` link
-- [ ] `id` matches filename stem
-- [ ] `id` does not start with `custom-` (reserved for in-browser uploads)
-- [ ] `node scripts/rebuild-index.mjs --check` passes
+**Theme** — add `data/themes/<id>.json`, any valid VSCode theme JSON. A screenshot in the PR helps me see what it looks like. The filename id shouldn't collide with a Shiki built-in theme name.
 
-### New theme PR
+**Language** — add `data/languages/<id>.json` plus `data/samples/<id>.txt`. Keep the sample a small, self-contained, real-looking program (~50–100 lines) that tokenizes cleanly, and make `shikiLang` a real Shiki language id.
 
-- [ ] One file added: `data/themes/<id>.json`
-- [ ] Valid VSCode theme shape (has `colors`, `tokenColors`, or `settings`)
-- [ ] Embedded `name` may differ from filename -- that's fine, filename stem wins
-- [ ] Screenshot of preview attached
-- [ ] `id` (filename stem) doesn't collide with any built-in theme name
-- [ ] `id` does not start with `custom-` (reserved for in-browser uploads)
-- [ ] `node scripts/rebuild-index.mjs --check` passes
-
-### New language PR
-
-- [ ] Two files added: `data/languages/<id>.json` + `data/samples/<id>.txt`
-- [ ] Sample meets the quality bar (see README)
-- [ ] Sample line count 50-100
-- [ ] All `exercises` items demonstrably present in sample
-- [ ] Sample tokenizes cleanly under Shiki
-- [ ] `shikiLang` is a valid Shiki built-in language id
-- [ ] `node scripts/rebuild-index.mjs --check` passes
+One small reserved-word note: ids starting with `custom-` belong to the in-browser uploader, so don't use that prefix for committed files.
 
 ## CI
 
-Every PR runs `node scripts/rebuild-index.mjs --check` to validate file shapes. When a PR merges to `main`, the index at `data/_index.json` is automatically regenerated and committed.
+You don't have to run anything — every PR runs `node scripts/rebuild-index.mjs --check` to make sure the files are shaped right, and the catalog regenerates itself once things land on `main`. If you'd rather check locally first:
+
+```bash
+node scripts/rebuild-index.mjs --check
+```
+
+That's it. Thanks for taking a look.

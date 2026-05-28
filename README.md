@@ -1,23 +1,30 @@
-# Muse — Coding Font × Theme × Language Live Preview
+# Muse
 
-Muse is a static, no-build-step web app that lets visitors live-preview any coding font, VSCode theme, and programming language combination in real time. Fonts load from CDN (no local install required), themes render through Shiki, and languages come with idiomatic sample programs. Selection state is shareable via URL hash. Everything is plain HTML, ES modules, and JSON — no bundler, no transpiler, no `npm install`.
+Muse lets you preview a coding font, a color theme, and a programming language together, live in the browser. Pick a font, pick a theme, pick a language — and see how the three actually look as a set before you commit to them in your editor.
 
-## Using the app
+It's a toy I built for myself, because I kept agonizing over editor fonts and themes and wanted a quick way to try combinations without installing anything. If you find it fun or useful too, that makes me happy.
 
-- **Live preview** — pick any font × theme × language combo from the sidebars and tabs.
-- **Randomized on first visit** — the very first time you open Muse (no saved preferences and no URL hash), it picks a random font and theme so each landing surfaces something new. Once you make a selection it sticks via `localStorage`, even if you later open the bare URL.
-- **Detected fonts** — Muse probes ~40 popular system/coding fonts on your machine (Menlo, Monaco, JetBrains Mono, Fira Code, Iosevka, …) and lists the ones it finds, no CDN needed.
-- **Add your own font (in-browser)** — the "Add Font" dialog accepts a CSS URL *or* an `@font-face` snippet, and can also probe whether a named font is already installed locally. Custom fonts are saved in `localStorage` on this device only.
-- **Add your own theme (in-browser)** — drop a `.json` file or paste any VSCode theme JSON. Stored in `localStorage` on this device only.
-- **Tweak rendering** — size slider, ligature toggle, and italic-comments toggle in the footer.
-- **Filter the sidebars** — fuzzy-search the font and theme pills; arrow keys move between them.
-- **Share via URL** — every change updates the URL hash; share it to reproduce the exact look on another device (built-in assets only).
+No build step, no `npm install`, no backend — just HTML, a handful of ES modules, and JSON files. Fonts stream from CDNs, themes render through [Shiki](https://shiki.style), and the whole thing deploys as static files on GitHub Pages.
 
----
+## What you can do
 
-## Add a font (1 file)
+- **Mix and match** — any font × theme × language combo, rendered instantly.
+- **Land on a surprise** — your first visit picks a random font and theme, so you start somewhere you didn't expect. Your choices stick after that.
+- **Use fonts you already have** — Muse checks for ~40 common coding fonts on your machine and lists the ones it finds, no download needed.
+- **Add your own font** — paste a CSS URL or an `@font-face` snippet in the *Add Font* dialog. Saved locally, just for you.
+- **Add your own theme** — drop in any VSCode theme JSON. Also saved locally.
+- **Tweak the details** — size, ligatures, italic comments.
+- **Search the sidebars** — fuzzy filter the pills, arrow keys to move between them.
+- **Share a link** — the URL captures your exact setup; send it and someone else sees the same thing. (Built-in fonts and themes travel; ones you added locally stay on your device.)
+- **Export to VSCode** — the *Export* button hands you a ready-to-paste `settings.json` for the setup you landed on.
 
-Drop a JSON file at `data/fonts/<id>.json`:
+## Add your own (and maybe send a PR)
+
+Everything lives in `data/` as plain JSON. Adding something is just dropping in a file — you never touch shared code, so there's nothing to conflict with. If you make something nice, a PR is welcome but never expected (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+
+### A font — one file
+
+`data/fonts/<id>.json`:
 
 ```json
 {
@@ -26,40 +33,21 @@ Drop a JSON file at `data/fonts/<id>.json`:
   "stack": "'Fira Code', monospace",
   "cssUrl": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
   "ligatures": true,
-  "weights": [400, 700],
   "credits": "https://github.com/tonsky/FiraCode"
 }
 ```
 
-The filename stem (`fira-code`) is the canonical id and must match the `id` field. The `cssUrl` should point to a Google Fonts or Fontsource stylesheet. The `stack` is the CSS `font-family` value applied to the preview.
+The filename and the `id` field have to match — that's the canonical id used in URLs. Point `cssUrl` at a Google Fonts or Fontsource stylesheet. `ligatures`, `weights`, and `credits` are optional.
 
-Repo manifests use `cssUrl` only. The in-browser "Add Font" uploader additionally accepts an `@font-face` snippet for one-off use — see *Using the app*.
+### A theme — one file
 
-That is the only file you need. On push to `main`, CI runs `scripts/rebuild-index.mjs`, which validates the file and regenerates `data/_index.json` automatically. The new font appears in the sidebar on the next deploy.
+`data/themes/<id>.json` — any standard VSCode theme JSON (the kind with `colors` and `tokenColors`). The filename is the id; the `name` inside the file is just for display and can differ.
 
-Optional fields: `ligatures` (boolean), `weights` (array of numbers), `credits` (URL or attribution string).
+Shiki's built-in themes come for free (they're listed in `data/themes/_builtin.json`), so you only need a file for themes Shiki doesn't already ship. The ones committed here happen to be light themes — dark coverage comes from the built-ins.
 
----
+### A language — two files
 
-## Add a theme (1 file)
-
-Drop a VSCode theme JSON file at `data/themes/<id>.json`. The format is the standard VSCode color theme format — a top-level object with `colors`, `tokenColors`, and/or `settings` fields.
-
-The filename stem is the canonical id, used in the URL hash (`?theme=<id>`). The internal `name` field (if present) is for human display only and can differ from the filename.
-
-One file is all you need. CI validates the theme shape and regenerates the index on push.
-
-Built-in Shiki themes are listed in `data/themes/_builtin.json` and do not need individual files. Only custom themes (not shipped by Shiki) go in `data/themes/`.
-
-The custom themes currently committed to `data/themes/` are all light variants; dark coverage is provided by Shiki built-ins listed in `data/themes/_builtin.json`.
-
----
-
-## Add a language (2 files)
-
-Languages require two files:
-
-1. **Manifest** at `data/languages/<id>.json`:
+A manifest at `data/languages/<id>.json`:
 
 ```json
 {
@@ -67,72 +55,34 @@ Languages require two files:
   "label": "Python",
   "shikiLang": "python",
   "sample": "data/samples/python.txt",
-  "summary": "Async ETL pipeline with dataclasses, decorators, and context managers.",
-  "exercises": ["dataclass", "decorators", "async/await", "context manager", "type hints", "f-string"]
+  "summary": "Async ETL pipeline with dataclasses, decorators, and context managers."
 }
 ```
 
-- `shikiLang` must match a language id Shiki recognizes (see [shiki.style/languages](https://shiki.style/languages)).
-- `sample` is a relative path to the sample file.
-- `exercises` lists the syntactic features the sample exercises (used by the validation CI and by human reviewers).
+…and the sample code itself at `data/samples/<id>.txt`. `shikiLang` has to be a language [Shiki knows](https://shiki.style/languages). A good sample is a small, real program (roughly 60–80 lines) that shows off the language's syntax — not a pile of features glued together.
 
-2. **Sample** at `data/samples/<id>.txt` — a plain text file containing the demo program.
+After adding any file, regenerate the catalog:
 
-The sample must meet the following quality bar:
-
-- Coherent small program (not a feature checklist glued together)
-- 60-80 lines ideal, 50-100 acceptable
-- Exercises every feature listed in the manifest's `exercises` array
-- Includes both string-quote styles the language supports, at least one number, and both line and block comments where available
-- Has a docstring or JSDoc-style header
-- Self-contained: no missing imports, no fake APIs, no `// rest of code...` placeholders
-- Tokenizes cleanly under Shiki (no truncated half-statements, no obvious lex errors)
-
----
-
-## URL sharing
-
-The URL hash encodes the full visual selection:
-
-```
-#font=fira-code&theme=dracula&lang=python&size=14&liga=1&italic=1
-```
-
-Every selection change updates the hash. On page load, the URL hash takes precedence over `localStorage`.
-
-Built-in assets (fonts, themes, languages committed to the repo) restore identically on any device. Runtime-uploaded custom fonts and themes persist only in `localStorage` on the browser where they were uploaded. A shared URL that references a runtime-only asset will fall back to defaults on a different device.
-
----
-
-## Local development
-
-Start a static HTTP server:
-
-```
-python3 -m http.server 8000
-```
-
-Then open http://localhost:8000.
-
-After adding or changing any data file, regenerate the index:
-
-```
+```bash
 node scripts/rebuild-index.mjs
 ```
 
-Node.js 18+ is required — the script uses `node:fs` only, no dependencies.
+CI does this automatically on push, so in a PR you can skip it — it's just handy locally.
 
-Do not use `file://` to test. The app uses `fetch()` for ES modules and data loading, which is blocked by the browser's same-origin policy on `file://`.
+## Run it locally
 
----
+```bash
+python3 -m http.server 8000
+```
 
-## Deployment (GitHub Pages)
+Then open http://localhost:8000. Any static server works; `file://` does **not** (the browser blocks `fetch()` for modules and data). Node 18+ if you want to run the rebuild script.
 
-1. Push the repo to GitHub.
-2. Go to **Settings → Pages → Source: Deploy from a branch**.
-3. Set **Branch: `main`**, **folder: `/ (root)`**.
-4. The site goes live at `https://<username>.github.io/<repo>/` within about a minute. Subsequent pushes auto-deploy.
+## How it's built
 
-The `.nojekyll` file at the repo root is required so GitHub Pages does not run Jekyll (which would drop files starting with `_` such as `_index.json` and `_builtin.json`).
+`index.html` boots `src/main.js`, which wires up a small pub/sub store, the Shiki highlighter, font loading, and the UI. State syncs to both `localStorage` and the URL hash, and that's the whole thing.
 
-On every push to `main`, the `rebuild-index.yml` workflow validates all data files and regenerates `data/_index.json`. That commit triggers a Pages deploy. On PRs, the same workflow runs in validation-only mode (`--check`) to catch issues before merge.
+If you want the wiring details — the invariants, the boot order, the gotchas I learned the hard way — they live in [AGENTS.md](AGENTS.md).
+
+## Deploying
+
+It's a static site, so GitHub Pages from the repo root just works. The one requirement is the empty `.nojekyll` file at the root, which stops Jekyll from eating the `_index.json` and `_builtin.json` files. Push to `main`, CI rebuilds the catalog, Pages redeploys.
