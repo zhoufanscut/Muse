@@ -10,6 +10,7 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
   const ul = document.createElement('ul');
   ul.setAttribute('role', 'listbox');
+  ul.setAttribute('aria-label', 'Fonts');
   ul.style.listStyle = 'none';
   ul.style.padding = '0';
   ul.style.margin = '0';

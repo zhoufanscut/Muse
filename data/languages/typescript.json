@@ -3,6 +3,5 @@
   "label": "TypeScript",
   "shikiLang": "typescript",
   "sample": "data/samples/typescript.txt",
-  "summary": "Typed event bus with TTL cache and generic subscribers.",
-  "exercises": ["generic types", "interface", "async/await", "Map/Set", "type guard", "template literal"]
+  "summary": "Typed event bus with TTL cache and generic subscribers."
 }

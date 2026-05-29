@@ -3,6 +3,5 @@
   "label": "C++",
   "shikiLang": "cpp",
   "sample": "data/samples/cpp.txt",
-  "summary": "Templated container with RAII, smart pointers, and constexpr.",
-  "exercises": ["#include", "namespace", "template<typename>", "class with public/private", "RAII destructor", "auto", "lambda", "range-for", "std::optional", "constexpr", "std::unique_ptr", "block comment"]
+  "summary": "Templated container with RAII, smart pointers, and constexpr."
 }

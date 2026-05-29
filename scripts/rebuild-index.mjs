@@ -37,7 +37,7 @@ for (const id of listIds('languages')) {
   const path = `data/languages/${id}.json`;
   const obj = readJSON(path); if (!obj) continue;
   unique(`lang:${id}`, path);
-  need(obj, ['id', 'label', 'shikiLang', 'sample', 'summary', 'exercises'], path);
+  need(obj, ['id', 'label', 'shikiLang', 'sample', 'summary'], path);
   if (obj.id !== id) errors.push(`${path}: id "${obj.id}" must match filename`);
   if (obj.sample && !existsSync(obj.sample)) {
     errors.push(`${path}: sample "${obj.sample}" not found`);

@@ -9,6 +9,16 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; img-src 'self' data:; connect-src 'self' https://esm.sh; base-uri 'self'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Muse — coding font × theme × language</title>
+  <meta name="description" content="Preview a coding font, color theme, and programming language together, live in the browser. Mix and match, share a link, and export the setup to VS Code.">
+  <!-- Social cards. og:url and og:image are intentionally omitted until the
+       canonical Pages URL and a preview image exist — add them when ready. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Muse">
+  <meta property="og:title" content="Muse — coding font × theme × language">
+  <meta property="og:description" content="Preview a coding font, color theme, and language together, live. Mix, match, share a link, export to VS Code.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Muse — coding font × theme × language">
+  <meta name="twitter:description" content="Preview a coding font, color theme, and language together, live. Mix, match, share a link, export to VS Code.">
   <link rel="icon" href="./favicon.ico">
   <link rel="stylesheet" href="./src/style.css">
   <style>
@@ -32,11 +42,11 @@
 <body>
   <div id="boot-overlay">Loading highlighter…</div>
 
-  <aside class="sidebar-fonts"></aside>
+  <aside class="sidebar-fonts" aria-label="Fonts"></aside>
   <header><h1>Muse</h1><span class="header-quote">Style is the perfection of a point of view. — Richard Eberhart</span></header>
-  <nav class="lang-tabs"></nav>
-  <main class="preview-pane"></main>
-  <aside class="sidebar-themes"></aside>
+  <nav class="lang-tabs" role="tablist" aria-label="Language"></nav>
+  <main class="preview-pane" aria-label="Code preview"></main>
+  <aside class="sidebar-themes" aria-label="Themes"></aside>
   <footer class="controls-bar"></footer>
 
   <script type="module" src="./src/main.js"></script>

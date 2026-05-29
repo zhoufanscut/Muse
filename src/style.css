@@ -8,7 +8,7 @@
   --accent:       #7c6aef;
   --accent-hover: #9080ff;
   --text:         #e0e0e0;
-  --text-muted:   #888;
+  --text-muted:   #9aa0ad;
 }
 
 [data-theme="light"] {
@@ -45,7 +45,6 @@ body {
 .sidebar-fonts  { grid-area: fonts;   overflow-y: auto; }
 .sidebar-themes { grid-area: themes;  overflow-y: auto; }
 .lang-tabs      { grid-area: tabs; }
-.preview-pane   { grid-area: preview; overflow: auto; }
 .controls-bar   { grid-area: ctrls; }
 
 .pill {
@@ -111,7 +110,9 @@ body {
 
 .preview-pane { font-feature-settings: "liga", "calt"; }
 .preview-pane.no-liga { font-feature-settings: "liga" 0, "calt" 0; }
-.preview-pane.italic-comments .shiki .comment,
+/* Italicizes comments when the toggle is on. Comments are normally made italic
+   by the Shiki theme variant (see ensureCommentStyleTheme in themes.js); this is
+   a CSS fallback for the case where that variant fails to load. */
 .preview-pane.italic-comments .shiki [style*="font-style:italic"] {
   font-style: italic !important;
 }
@@ -246,11 +247,10 @@ input[type="range"] {
   z-index: 9999;
   color: var(--text);
 }
-#boot-overlay.hidden {
-  display: none;
-}
 
 .preview-pane {
+  grid-area: preview;
+  overflow: auto;
   border-radius: 8px;
   border: 1px solid var(--border);
   padding: 24px;
@@ -780,3 +780,27 @@ header h1 {
   color: var(--text-muted);
 }
 .export-steps li { padding-left: 2px; }
+
+/* ── Responsive: collapse the 3-column grid on narrow viewports ───────────── */
+@media (max-width: 820px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "tabs"
+      "ctrls"
+      "preview"
+      "fonts"
+      "themes";
+  }
+  /* Cap the now-stacked sidebars so the long pill lists don't dominate scroll. */
+  .sidebar-fonts,
+  .sidebar-themes { max-height: 50vh; }
+  .controls-bar { flex-wrap: wrap; }
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .header-quote { white-space: normal; }
+}

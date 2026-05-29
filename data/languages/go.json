@@ -3,6 +3,5 @@
   "label": "Go",
   "shikiLang": "go",
   "sample": "data/samples/go.txt",
-  "summary": "Tiny HTTP service with struct tags, interfaces, and goroutines.",
-  "exercises": ["package", "struct with json tags", "interface", "method receivers", "goroutine + channel", "defer", "if err != nil", "switch", "map/slice literals", "raw string backticks"]
+  "summary": "Tiny HTTP service with struct tags, interfaces, and goroutines."
 }

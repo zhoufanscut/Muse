@@ -20,7 +20,15 @@ function parseHash(hash) {
   const p = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
   const out = {};
   for (const [k, v] of p) {
-    if (k === 'size') out.size = Number(v);
+    if (k === 'size') {
+      // Guard against a mangled/hand-edited hash (size=foo, size=, size=9999):
+      // ignore empty/non-numeric values; clamp + round the rest to the slider's
+      // integer 10–22 range so the stored size matches the slider's step.
+      const n = Number(v);
+      if (v.trim() !== '' && Number.isFinite(n)) {
+        out.size = Math.round(Math.min(22, Math.max(10, n)));
+      }
+    }
     else if (k === 'liga') out.ligatures = v === '1';
     else if (k === 'italic') out.italic = v === '1';
     else out[k] = v;

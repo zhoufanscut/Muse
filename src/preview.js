@@ -12,6 +12,9 @@ let renderToken = 0;
 
 export async function renderPreview({ font, theme, lang, langManifest, size, ligatures, italic, container, builtinThemes }) {
   const token = ++renderToken;
+  // The manifest id (e.g. "csharp") is not always Shiki's language id. Use the
+  // declared shikiLang when present; fall back to the id for the common case.
+  const shikiLang = langManifest?.shikiLang || lang;
 
   applyFontStyles({ container, font, size, ligatures, italic });
 
@@ -25,7 +28,7 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
     try { await ensureCustomTheme(theme); } catch (e) { console.error(e); }
   }
 
-  await ensureLang(lang);
+  await ensureLang(shikiLang);
 
   let renderTheme = theme;
   try {
@@ -54,7 +57,7 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
 
   let html;
   try {
-    html = await highlight(code, lang, renderTheme);
+    html = await highlight(code, shikiLang, renderTheme);
   } catch (e) {
     // Fallback: plain <pre> with banner — font still applies
     console.error(e);
