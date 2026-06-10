@@ -25,8 +25,17 @@ function unique(key, where) {
   seen.add(key);
 }
 
+// Ids starting with "custom-" are reserved for runtime uploads (the UI even
+// treats custom- font pills as removable) — committed files must not use it.
+function checkReservedPrefix(id, path) {
+  if (id.startsWith('custom-')) {
+    errors.push(`${path}: the "custom-" id prefix is reserved for runtime uploads`);
+  }
+}
+
 for (const id of listIds('fonts')) {
   const path = `data/fonts/${id}.json`;
+  checkReservedPrefix(id, path);
   const obj = readJSON(path); if (!obj) continue;
   unique(`font:${id}`, path);
   need(obj, ['id', 'name', 'stack'], path);
@@ -35,10 +44,17 @@ for (const id of listIds('fonts')) {
 
 for (const id of listIds('languages')) {
   const path = `data/languages/${id}.json`;
+  checkReservedPrefix(id, path);
   const obj = readJSON(path); if (!obj) continue;
   unique(`lang:${id}`, path);
   need(obj, ['id', 'label', 'shikiLang', 'sample', 'summary'], path);
   if (obj.id !== id) errors.push(`${path}: id "${obj.id}" must match filename`);
+  // The loader prepends "./" at fetch time, so the manifest stores a plain
+  // "data/samples/<file>.txt" path — no "./" prefix, no subdirectories, no
+  // ".." escapes (existsSync alone would accept those).
+  if (obj.sample && !/^data\/samples\/[^/]+\.txt$/.test(obj.sample)) {
+    errors.push(`${path}: sample must be "data/samples/<file>.txt" (no "./" prefix, no subdirectories)`);
+  }
   if (obj.sample && !existsSync(obj.sample)) {
     errors.push(`${path}: sample "${obj.sample}" not found`);
   }
@@ -46,6 +62,7 @@ for (const id of listIds('languages')) {
 
 for (const id of listIds('themes')) {
   const path = `data/themes/${id}.json`;
+  checkReservedPrefix(id, path);
   const obj = readJSON(path); if (!obj) continue;
   unique(`theme:${id}`, path);
   if (!obj.colors && !obj.tokenColors && !obj.settings) {

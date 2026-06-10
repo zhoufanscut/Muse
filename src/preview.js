@@ -4,7 +4,7 @@
 // (font/theme/lang/ligatures/italic unchanged) and calls updateFontSize() — a
 // pure CSS update — instead of re-invoking renderPreview() and re-tokenizing.
 
-import { highlight, ensureLang, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme } from './themes.js';
+import { highlight, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme } from './themes.js';
 import { loadWebFont } from './fonts.js';
 import { loadSample } from './languages.js';
 
@@ -27,8 +27,6 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   if (builtinThemes && !builtinThemes.has(theme)) {
     try { await ensureCustomTheme(theme); } catch (e) { console.error(e); }
   }
-
-  await ensureLang(shikiLang);
 
   let renderTheme = theme;
   try {

@@ -1,5 +1,5 @@
 import { registerCustomFont, installFont, registerFoundFont, sanitizeFontFace } from '../fonts.js';
-import { getHighlighter, markThemeLoaded } from '../themes.js';
+import { getHighlighter, markThemeLoaded, invalidateCommentStyleVariants } from '../themes.js';
 import { createDialog, svgIcon } from './dialog.js';
 
 const FONT_KEY = 'muse:custom-fonts';
@@ -14,8 +14,6 @@ function slugify(name) {
 // CSS-inject. Real VSCode themes only ever use hex.
 const COLOR_RE = /^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))?$/;
 
-const FONT_STYLE_TOKENS = new Set(['italic', 'bold', 'underline', 'strikethrough']);
-
 function validateThemeColors(theme) {
   const bad = (val, where) => {
     if (val == null) return null;
@@ -24,15 +22,18 @@ function validateThemeColors(theme) {
     return null;
   };
 
-  // fontStyle is a space-separated subset of italic/bold/underline/strikethrough
-  // (or '' to clear). Shiki maps known tokens into inline styles; reject the rest.
+  // fontStyle is a space-separated list of style words ('italic bold', or
+  // 'normal'/'regular'/'' to clear — real themes use all of these). Shiki only
+  // maps the tokens it knows (italic/bold/underline/strikethrough) into inline
+  // styles and ignores the rest, so any purely alphabetic word is safe; reject
+  // anything else (separators, urls) that could smuggle CSS.
   const badFontStyle = (val, where) => {
     if (val == null) return null;
     if (typeof val !== 'string') return `${where}: must be a string`;
     const trimmed = val.trim();
     if (trimmed === '') return null;
     for (const tok of trimmed.split(/\s+/)) {
-      if (!FONT_STYLE_TOKENS.has(tok)) return `${where}: invalid fontStyle "${val}"`;
+      if (!/^[a-zA-Z]+$/.test(tok)) return `${where}: invalid fontStyle "${val}"`;
     }
     return null;
   };
@@ -47,6 +48,15 @@ function validateThemeColors(theme) {
   if (theme.colors && typeof theme.colors === 'object') {
     for (const [k, v] of Object.entries(theme.colors)) {
       const err = bad(v, `colors.${k}`);
+      if (err) return err;
+    }
+  }
+
+  // Shiki splices colorReplacements *values* into inline styles at render time
+  // — the same injection surface as the colors above.
+  if (theme.colorReplacements && typeof theme.colorReplacements === 'object') {
+    for (const [k, v] of Object.entries(theme.colorReplacements)) {
+      const err = bad(v, `colorReplacements.${k}`);
       if (err) return err;
     }
   }
@@ -484,10 +494,11 @@ function storeCustomTheme(id, theme) {
   runtimeThemes.set(id, themeObj);
   try {
     const existing = JSON.parse(localStorage.getItem(THEME_KEY) || '[]');
-    if (!existing.find(t => t.id === id)) {
-      existing.push({ id, theme: themeObj });
-      localStorage.setItem(THEME_KEY, JSON.stringify(existing));
-    }
+    // Replace on re-upload (same id) so the stored theme can't go stale.
+    const idx = existing.findIndex(t => t.id === id);
+    if (idx >= 0) existing[idx] = { id, theme: themeObj };
+    else existing.push({ id, theme: themeObj });
+    localStorage.setItem(THEME_KEY, JSON.stringify(existing));
     return true;
   } catch (e) {
     console.error(e);
@@ -514,6 +525,8 @@ async function registerRuntimeTheme(id, themeObj) {
   const theme = { ...themeObj, name: id };
   await h.loadTheme(theme);
   markThemeLoaded(id);
+  // On re-upload, stale variants would keep rendering the old base theme.
+  invalidateCommentStyleVariants(id);
 }
 
 export async function restoreCustom({ onFontAdded, onThemeAdded }) {

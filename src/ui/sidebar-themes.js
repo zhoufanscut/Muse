@@ -1,4 +1,4 @@
-import { getState, setState, subscribe } from '../state.js';
+import { getState, setState, subscribe, removeFromCatalog } from '../state.js';
 import { getKnownTheme, ensureCustomTheme, isThemeLoaded } from '../themes.js';
 import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
 import { fetchJson } from '../util.js';
@@ -59,6 +59,7 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     const pill = pills.get(id);
     if (pill) { pill.remove(); pills.delete(id); }
     removeCustomTheme(id);
+    removeFromCatalog('themes', id);
     if (getState().theme === id) {
       const fallback = [...pills.keys()][0];
       if (fallback) setState({ theme: fallback });
@@ -71,6 +72,9 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     const li = document.createElement('li');
     li.className = 'pill pill-theme';
     li.setAttribute('role', 'option');
+    // Initial selected state matters for pills added after mount (restored
+    // custom themes): the subscriber only re-runs on the next state change.
+    li.setAttribute('aria-selected', id === getState().theme ? 'true' : 'false');
     li.setAttribute('tabindex', '0');
     li.dataset.id = id;
 
@@ -149,7 +153,10 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
   }
 
   function addCustomThemePill(id) {
-    if (pills.has(id)) return;
+    // Re-upload with the same id: rebuild the pill so the DARK/LIGHT badge and
+    // swatches reflect the new theme JSON instead of the stale one.
+    const existing = pills.get(id);
+    if (existing) { existing.remove(); pills.delete(id); }
     createThemePill(id, true);
 
     // Insert at correct alphabetical position among all pills

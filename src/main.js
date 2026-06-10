@@ -1,6 +1,6 @@
 // muse/main — boot orchestrator
 
-import { getState, subscribe, setCatalog } from './state.js';
+import { getState, setState, subscribe, setCatalog, extendCatalog } from './state.js';
 import { getHighlighter, getKnownTheme } from './themes.js';
 import { fetchJson } from './util.js';
 import { loadFontManifests, detectInstalledFonts, restoreFoundFonts } from './fonts.js';
@@ -42,10 +42,28 @@ try {
   const allFonts = [...installedFonts, ...fontManifests];
 
   function rememberFont(font) {
-    if (font && !allFonts.some(f => f.id === font.id)) {
-      allFonts.push(font);
-    }
+    if (!font) return font;
+    const idx = allFonts.findIndex(f => f.id === font.id);
+    if (idx >= 0) allFonts[idx] = font; // re-upload: refresh the stored spec
+    else allFonts.push(font);
     return font;
+  }
+
+  // Both uploader callbacks below: register the id with the state catalog
+  // first, or setState validation would bounce the new selection to defaults.
+  // The trailing self-setState forces a re-render when the *selected* asset
+  // was just re-uploaded — nothing else triggers one, since the pill and the
+  // catalog entry already exist (setState notifies subscribers even when the
+  // value is unchanged).
+  function onFontAdded(font) {
+    extendCatalog('fonts', font.id);
+    fontsSidebar.addCustomFontPill(rememberFont(font));
+    if (getState().font === font.id) setState({ font: font.id });
+  }
+  function onThemeAdded({ id }) {
+    extendCatalog('themes', id);
+    themesSidebar.addCustomThemePill(id);
+    if (getState().theme === id) setState({ theme: id });
   }
 
   // Read runtime-uploaded ids from localStorage BEFORE setCatalog validates state.
@@ -99,14 +117,11 @@ try {
   mountUploaders({
     addFontBtn: document.getElementById('add-font-btn'),
     addThemeBtn,
-    onFontAdded: (font) => { fontsSidebar.addCustomFontPill(rememberFont(font)); },
-    onThemeAdded: ({ id }) => { themesSidebar.addCustomThemePill(id); },
+    onFontAdded,
+    onThemeAdded,
   });
 
-  await restoreCustom({
-    onFontAdded: (font) => { fontsSidebar.addCustomFontPill(rememberFont(font)); },
-    onThemeAdded: ({ id }) => { themesSidebar.addCustomThemePill(id); },
-  });
+  await restoreCustom({ onFontAdded, onThemeAdded });
 
   function currentLangManifest() {
     const state = getState();

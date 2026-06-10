@@ -31,7 +31,9 @@ function parseHash(hash) {
     }
     else if (k === 'liga') out.ligatures = v === '1';
     else if (k === 'italic') out.italic = v === '1';
-    else out[k] = v;
+    // Only known keys: anything else in a hand-edited hash would otherwise
+    // leak into state and get persisted to localStorage forever.
+    else if (k === 'font' || k === 'theme' || k === 'lang') out[k] = v;
   }
   return out;
 }
@@ -53,7 +55,12 @@ function load() {
   try {
     stored = JSON.parse(localStorage.getItem(KEY) || 'null');
   } catch {}
-  return { ...DEFAULTS, ...(stored || {}), ...(parseHash(location.hash) || {}) };
+  const merged = { ...DEFAULTS, ...(stored || {}), ...(parseHash(location.hash) || {}) };
+  // Known keys only: junk persisted by pre-whitelist versions of muse:state
+  // would otherwise be re-persisted forever.
+  const out = {};
+  for (const k of Object.keys(DEFAULTS)) out[k] = merged[k];
+  return out;
 }
 
 // Captured before any write so we can tell a genuine first visit (no saved
@@ -113,12 +120,25 @@ export function setCatalog(c) {
   for (const fn of subs) fn(state);
 }
 
+// Runtime uploads/removals happen after boot; keep the catalog in sync so
+// setState validation doesn't bounce freshly added ids back to defaults.
+export function extendCatalog(kind, id) {
+  if (!catalog || !catalog[kind] || catalog[kind].includes(id)) return;
+  catalog[kind].push(id);
+}
+
+export function removeFromCatalog(kind, id) {
+  if (!catalog || !catalog[kind]) return;
+  const i = catalog[kind].indexOf(id);
+  if (i >= 0) catalog[kind].splice(i, 1);
+}
+
 export function getState() {
   return { ...state };
 }
 
 export function setState(patch) {
-  state = { ...state, ...patch };
+  state = validateAgainstCatalog({ ...state, ...patch });
   // Size fires rapidly during slider drags — debounce its persistence. Every
   // other change persists immediately so a copied URL hash is never stale.
   if (Object.keys(patch).length === 1 && 'size' in patch) schedulePersist();
@@ -131,3 +151,13 @@ export function subscribe(fn) {
   fn(state);
   return () => subs.delete(fn);
 }
+
+// Apply live hash edits (pasting a shared #hash into an open tab, or a link
+// targeting this tab) without a reload. Our own writes go through
+// history.replaceState, which never fires hashchange — no feedback loop.
+window.addEventListener('hashchange', () => {
+  const fromHash = parseHash(location.hash);
+  if (!fromHash) return;
+  const changed = Object.keys(fromHash).some(k => fromHash[k] !== state[k]);
+  if (changed) setState(fromHash);
+});

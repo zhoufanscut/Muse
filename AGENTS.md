@@ -87,7 +87,7 @@ link.addEventListener('load', ...);
 ```
 URL hash > localStorage > hardcoded defaults
 ```
-On page load, hash overrides everything. When state changes, **both** `localStorage` and URL hash update simultaneously.
+On page load, hash overrides everything. When state changes, **both** `localStorage` and URL hash update simultaneously. `state.js` also listens for `hashchange`, so pasting a shared hash into an open tab applies live — unknown hash keys are ignored, invalid ids fall back to defaults. The app's own hash writes use `history.replaceState`, which never fires `hashchange` (no feedback loop).
 
 ### `.nojekyll`
 The root `.nojekyll` file (empty) is **required** for GitHub Pages. Without it, Jekyll drops files starting with `_` (like `_index.json` and `_builtin.json`), and the app fails to boot.
@@ -107,13 +107,13 @@ Fonts/themes uploaded at runtime via the UI dialogs persist in `localStorage` **
 Pinned to `https://esm.sh/shiki@1.24.0` in `src/themes.js`. Changing this requires verifying that all custom theme loading still works, the theme API hasn't changed, and all `shikiLang` values in language manifests are still valid.
 
 ### Sample path convention
-Language manifests store `sample` as a **relative path without `./` prefix** (e.g. `"sample": "data/samples/python.txt"`). The loader (`src/languages.js`) prepends `./` at fetch time. Never include `./` in the manifest's `sample` field — it would produce `././data/samples/x.txt` and break.
+Language manifests store `sample` as a **relative path without `./` prefix** (e.g. `"sample": "data/samples/python.txt"`). The loader (`src/languages.js`) prepends `./` at fetch time. Never include `./` in the manifest's `sample` field — `rebuild-index.mjs --check` rejects anything that doesn't match `data/samples/<file>.txt`.
 
 ### Custom theme slug prefix
 Runtime-uploaded themes get slugs prefixed with `custom-` (see `slugify()` in `src/ui/uploaders.js`). This distinguishes runtime-only themes from repo themes and prevents accidental filename collisions. Repo themes never use this prefix.
 
 ### Custom font slug prefix
-Runtime-uploaded fonts (URL or `@font-face` via the dialog) also get `custom-`-prefixed ids — `slugify()` computes the id in `src/ui/uploaders.js` and `installFont` honors `spec.id`. This stops a name like "JetBrains Mono" from shadowing the repo `jetbrains-mono` manifest. System/"found" fonts keep their **real** id (no prefix) so they map to the actually-installed font. Repo fonts never use this prefix.
+Runtime-uploaded fonts (URL or `@font-face` via the dialog) also get `custom-`-prefixed ids — `slugify()` computes the id in `src/ui/uploaders.js` and `installFont` honors `spec.id`. This stops a name like "JetBrains Mono" from shadowing the repo `jetbrains-mono` manifest. System/"found" fonts keep their **real** id (no prefix) so they map to the actually-installed font. Repo fonts, themes, and languages never use this prefix — `rebuild-index.mjs --check` rejects committed `custom-*` files.
 
 ### Content-Security-Policy
 `index.html` carries a CSP `<meta>`. `script-src` must keep `https://esm.sh` **and** `'wasm-unsafe-eval'`, and `connect-src` must keep `https://esm.sh` — Shiki loads its module and oniguruma WASM from there, and a stricter policy silently breaks highlighting. `style-src`/`font-src` allow any `https:` host so custom fonts from any CDN work; `style-src` needs `'unsafe-inline'` because Shiki emits inline styles. Update the directive list when introducing a new CDN.
@@ -164,6 +164,8 @@ setState({ theme: 'dracula' });
 const unsub = subscribe((state) => { /* render */ });
 ```
 
-Before `setCatalog()` is called during boot, `setState` does NOT validate against available assets. After boot, invalid font/theme/lang IDs trigger `console.error` and fall back to defaults.
+Before `setCatalog()` is called during boot, `setState` does NOT validate against available assets. After boot, every `setState` validates: invalid font/theme/lang IDs trigger `console.error` and fall back to defaults.
+
+Because of that validation, runtime additions/removals must keep the catalog in sync via `extendCatalog('fonts'|'themes', id)` / `removeFromCatalog(...)` — `main.js` does this in its `onFontAdded`/`onThemeAdded` callbacks, the sidebars on pill removal. Selecting a freshly uploaded asset without extending the catalog bounces the selection back to defaults.
 
 **First-visit randomization**: On the very first visit (no `localStorage` state AND no URL hash), `setCatalog()` picks a random font and theme from the catalog. This is how each new visitor sees a different landing combination. On subsequent visits, the stored or hash-driven selection wins.

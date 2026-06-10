@@ -1,6 +1,11 @@
-import { getState, setState, subscribe } from '../state.js';
+import { getState, setState, subscribe, removeFromCatalog } from '../state.js';
 import { loadWebFont, removeCustomFont, removeFoundFont } from '../fonts.js';
 import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
+
+// A font renders from the OS only when it has no web source: cssUrl AND pasted
+// @font-face both need load verification (and a "web" badge).
+const isInstalledFont = (font) =>
+  !!font && (font.installed || (!font.cssUrl && !font.fontFaceCss));
 
 // State is captured per-mount in this closure (no module singleton) so a second
 // sidebar could be mounted without clobbering the first.
@@ -25,8 +30,7 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
       if (entry.isIntersecting) {
         const fontId = entry.target.dataset.fontId;
         const font = allFonts.find(f => f.id === fontId);
-        const isInstalled = font && (font.installed || !font.cssUrl);
-        if (font && !isInstalled) {
+        if (font && !isInstalledFont(font)) {
           const { statusBadge } = entryMap.get(fontId) || {};
           if (statusBadge && statusBadge.style.display === 'none') {
             statusBadge.style.display = 'inline-block';
@@ -56,7 +60,8 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     }
   }
 
-  function removeFont(id) {
+  // DOM/list cleanup only — used by both true removal and re-upload rebuilds.
+  function removePill(id) {
     const entry = entryMap.get(id);
     if (entry) {
       observer.unobserve(entry.li);
@@ -65,10 +70,15 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     }
     const idx = allFonts.findIndex(f => f.id === id);
     if (idx >= 0) allFonts.splice(idx, 1);
+  }
+
+  function removeFont(id) {
+    removePill(id);
     // custom- uploads live in muse:custom-fonts; user-added installed fonts in
     // muse:found-fonts. Route to the right store so removal actually persists.
     if (id.startsWith('custom-')) removeCustomFont(id);
     else removeFoundFont(id);
+    removeFromCatalog('fonts', id);
     if (getState().font === id && allFonts[0]) setState({ font: allFonts[0].id });
   }
 
@@ -101,7 +111,7 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     badgeContainer.style.alignItems = 'center';
     badgeContainer.style.gap = '6px';
 
-    const isInstalled = font.installed || !font.cssUrl;
+    const isInstalled = isInstalledFont(font);
     const typeBadge = document.createElement('span');
     typeBadge.className = isInstalled ? 'badge-installed' : 'badge-web';
     typeBadge.textContent = isInstalled ? 'installed' : 'web';
@@ -226,7 +236,9 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   });
 
   function addCustomFontPill(font) {
-    if (entryMap.has(font.id)) return;
+    // Re-upload with the same id: rebuild the pill so its closures (select
+    // handler, badge verification) capture the fresh spec, not the old source.
+    if (entryMap.has(font.id)) removePill(font.id);
     createFontPill(font);
     applyFilter();
   }

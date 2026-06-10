@@ -104,3 +104,10 @@ export async function getKnownTheme(name) {
 
 export function markThemeLoaded(id) { loadedThemes.add(id); }
 export function isThemeLoaded(id) { return loadedThemes.has(id); }
+
+// Forget a theme's cached comment-style variants so the next render rebuilds
+// them from the (possibly re-uploaded) base theme.
+export function invalidateCommentStyleVariants(id) {
+  loadedThemes.delete(`${id}__muse-comments-italic`);
+  loadedThemes.delete(`${id}__muse-comments-normal`);
+}

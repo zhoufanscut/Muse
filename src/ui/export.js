@@ -10,16 +10,20 @@ import { isFontAvailable } from '../fonts.js';
 // extension's label comes from package.json, not the theme file.
 const DROP_KEYS = new Set(['bg', 'fg', 'colorReplacements', 'displayName']);
 
-function buildSettingsSnippet(font, state) {
+function buildSettingsSnippet(font, state, themeId) {
   const settings = {
     'editor.fontFamily': font.stack,
     'editor.fontSize': state.size,
     'editor.fontLigatures': !!state.ligatures,
   };
-  // The italic-comments toggle maps to a token-color customization in VS Code.
-  if (state.italic) {
-    settings['editor.tokenColorCustomizations'] = { comments: { fontStyle: 'italic' } };
-  }
+  // Muse always forces comment style (italic or upright) via a theme variant;
+  // mirror that with an explicit override so "italic off" also wins over
+  // themes whose comments are natively italic. Scoped to this theme's label
+  // (what our generated extension contributes) so it can't bleed into the
+  // user's other VS Code themes.
+  settings['editor.tokenColorCustomizations'] = {
+    [`[${themeId}]`]: { comments: { fontStyle: state.italic ? 'italic' : '' } },
+  };
   return JSON.stringify(settings, null, 2);
 }
 
@@ -158,7 +162,7 @@ function buildFontNote(font) {
   return note;
 }
 
-function buildFontSection(font, state) {
+function buildFontSection(font, state, themeId) {
   const section = document.createElement('section');
   section.className = 'export-section';
 
@@ -172,7 +176,7 @@ function buildFontSection(font, state) {
   desc.textContent = 'Add these to your VS Code settings.json:';
   section.appendChild(desc);
 
-  section.appendChild(makeCodeBlock(buildSettingsSnippet(font, state)));
+  section.appendChild(makeCodeBlock(buildSettingsSnippet(font, state, themeId)));
   section.appendChild(buildFontNote(font));
   return section;
 }
@@ -239,7 +243,7 @@ export function showExportDialog({ font, state, resolveThemeJson }) {
   intro.textContent = `Recreate this look in VS Code: ${font.name} at ${state.size}px with the ${themeId} theme.`;
   body.appendChild(intro);
 
-  body.appendChild(buildFontSection(font, state));
+  body.appendChild(buildFontSection(font, state, themeId));
 
   const themeSection = document.createElement('section');
   themeSection.className = 'export-section';

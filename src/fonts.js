@@ -74,6 +74,9 @@ function ensureStylesheet(cssUrl) {
     };
     const markFailed = () => {
       stylesheetPromises.delete(cssUrl);
+      // Drop the dead <link>: its error event has already fired, so a retry
+      // must inject a fresh element — re-listening on this one never settles.
+      link.remove();
       resolve(false);
     };
 
@@ -106,7 +109,12 @@ function ensureStylesheet(cssUrl) {
 export async function loadWebFont(font) {
   if (!font?.name) return false;
 
-  const key = `${font.cssUrl || 'local'}::${font.name}`;
+  // Key by source, not just name: an installed "Foo" and a pasted @font-face
+  // "Foo" must not share a cached result, and re-pasting a *changed*
+  // @font-face under the same display name must bypass the old entry.
+  const key = font.cssUrl ? `url:${font.cssUrl}::${font.name}`
+    : font.fontFaceCss ? `css:${font.fontFaceCss}::${font.name}`
+    : `local::${font.name}`;
   if (fontPromises.has(key)) return fontPromises.get(key);
 
   const promise = (async () => {
@@ -119,8 +127,15 @@ export async function loadWebFont(font) {
     }
 
     // document.fonts.load waits for the actual decoded font, unlike <link> load.
-    await document.fonts.load(`16px "${font.name}"`);
-    return true;
+    // It resolves with the faces that matched — empty means no @font-face matched
+    // the name (e.g. display name ≠ family in the CSS). System fonts legitimately
+    // match nothing, so only web-sourced fonts require a match.
+    const faces = await document.fonts.load(`16px "${font.name}"`);
+    const ok = (font.cssUrl || font.fontFaceCss) ? faces.length > 0 : true;
+    // A name mismatch can be fixed by re-uploading under the same display
+    // name — don't pin the failure for the whole session.
+    if (!ok) fontPromises.delete(key);
+    return ok;
   })().catch(() => {
     fontPromises.delete(key);
     return false;
@@ -183,15 +198,9 @@ export function installFont(spec) {
   const stack = `'${spec.name}', monospace`;
 
   if (spec.cssUrl) {
-    const existing = document.querySelector(
-      `link[rel="stylesheet"][href="${spec.cssUrl}"]`
-    );
-    if (!existing) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = spec.cssUrl;
-      document.head.appendChild(link);
-    }
+    // Inject via ensureStylesheet so load/error listeners attach at birth: a
+    // bare <link> that failed would hang later loadWebFont calls forever.
+    ensureStylesheet(spec.cssUrl);
   } else if (spec.fontFaceCss) {
     const style = document.createElement('style');
     style.textContent = spec.fontFaceCss;
@@ -216,10 +225,11 @@ export function registerCustomFont(spec) {
     const existing = JSON.parse(
       localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'
     );
-    if (!existing.find(f => f.id === fontObject.id)) {
-      existing.push(fontObject);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
-    }
+    // Replace on re-upload (same id) so the stored spec can't go stale.
+    const idx = existing.findIndex(f => f.id === fontObject.id);
+    if (idx >= 0) existing[idx] = fontObject;
+    else existing.push(fontObject);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
     persisted = true;
   } catch (e) {
     console.error(e);
