@@ -1,5 +1,9 @@
 # AGENTS.md
 
+> **New to the codebase?** Read [GLOSSARY.md](GLOSSARY.md) first — it defines the project's
+> vocabulary (asset types, ids, catalog, state, the rendering pipeline). This file then layers
+> on the architecture and the **critical invariants** those terms are bound by.
+
 ## Project type
 
 Muse is a **static, no-build-step web app** — plain HTML + vanilla ES modules + JSON data files. No `package.json`, no bundler, no transpiler, no test harness, no linter. Dependencies (Shiki) load at runtime from `esm.sh` CDN. Deployed as **GitHub Pages** from the repo root on `main`.

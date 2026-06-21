@@ -177,15 +177,17 @@ body {
   display: flex;
 }
 
-.badge-web, .badge-installed, .badge-error {
+.badge-web, .badge-installed, .badge-error, .badge-builtin, .badge-custom {
   font-size: 0.7em;
   padding: 2px 6px;
   border-radius: 10px;
   text-transform: uppercase;
   font-weight: bold;
 }
-.badge-web { background: #2a2a4e; color: #a0a0ff; }
-.badge-installed { background: #1e3a2e; color: #80ffb0; }
+/* Fonts use installed/web; themes use custom/builtin. Same two color chips,
+   named per domain so neither borrows the other's vocabulary. */
+.badge-web, .badge-builtin { background: #2a2a4e; color: #a0a0ff; }
+.badge-installed, .badge-custom { background: #1e3a2e; color: #80ffb0; }
 .badge-error { background: #4a1e1e; color: #ff8080; }
 
 .swatch-strip {

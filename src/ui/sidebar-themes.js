@@ -86,7 +86,7 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     pillMeta.className = 'pill-meta';
 
     const badge = document.createElement('span');
-    badge.className = isCustom ? 'badge-installed' : 'badge-web';
+    badge.className = isCustom ? 'badge-custom' : 'badge-builtin';
     badge.textContent = '...';
     pillMeta.appendChild(badge);
 
