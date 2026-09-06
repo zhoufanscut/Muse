@@ -1,6 +1,10 @@
-import { getState, setState, subscribe, removeFromCatalog } from '../state.js';
+import { getState, setState, subscribe, removeFromCatalog, DEFAULTS } from '../state.js';
 import { loadWebFont, removeCustomFont, removeFoundFont } from '../fonts.js';
-import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
+import { fuzzyScore } from './search.js';
+import {
+  createRemoveButton, makeSearchBox, syncTabStops, scrollIntoContainerView,
+  bindPillKeys, firstVisiblePill,
+} from './pill.js';
 
 // A font renders from the OS only when it has no web source: cssUrl AND pasted
 // @font-face both need load verification (and a "web" badge).
@@ -16,48 +20,47 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   const ul = document.createElement('ul');
   ul.setAttribute('role', 'listbox');
   ul.setAttribute('aria-label', 'Fonts');
-  ul.style.listStyle = 'none';
-  ul.style.padding = '0';
-  ul.style.margin = '0';
-  ul.style.display = 'flex';
-  ul.style.flexDirection = 'column';
-  ul.style.gap = '8px';
 
-  const entryMap = new Map();
+  const entryMap = new Map(); // id → { li, statusBadge, font }
+  const pillEls = () => [...entryMap.values()].map(e => e.li);
+  const selectedEl = () => entryMap.get(getState().font)?.li || null;
 
+  // Verify a web font (spinner → ✓ / "could not load") the first time its pill
+  // scrolls into view, so fonts far down the list aren't all fetched at boot.
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.isIntersecting) {
-        const fontId = entry.target.dataset.fontId;
-        const font = allFonts.find(f => f.id === fontId);
-        if (font && !isInstalledFont(font)) {
-          const { statusBadge } = entryMap.get(fontId) || {};
-          if (statusBadge && statusBadge.style.display === 'none') {
-            statusBadge.style.display = 'inline-block';
-            statusBadge.className = 'spinner';
-            statusBadge.textContent = '';
-
-            loadWebFont(font).then(success => {
-              statusBadge.className = success ? 'badge-installed' : 'badge-error';
-              statusBadge.textContent = success ? '✓' : 'could not load';
-            });
-          }
-        }
-        observer.unobserve(entry.target);
+      if (!entry.isIntersecting) continue;
+      const rec = entryMap.get(entry.target.dataset.fontId);
+      if (rec && !isInstalledFont(rec.font) && rec.statusBadge.dataset.state === 'idle') {
+        verify(rec);
       }
+      observer.unobserve(entry.target);
     }
   }, { root: container, rootMargin: '50px' });
+
+  function verify(rec) {
+    const { statusBadge, font } = rec;
+    statusBadge.dataset.state = 'loading';
+    statusBadge.hidden = false;
+    statusBadge.className = 'spinner';
+    statusBadge.textContent = '';
+    loadWebFont(font).then(success => {
+      if (entryMap.get(font.id) !== rec) return; // pill rebuilt or removed meanwhile
+      statusBadge.dataset.state = success ? 'ok' : 'error';
+      statusBadge.className = success ? 'badge-installed' : 'badge-error';
+      statusBadge.textContent = success ? '✓' : 'could not load';
+    });
+  }
 
   let searchQuery = '';
 
   function applyFilter() {
-    for (const [id, { li }] of entryMap) {
-      const font = allFonts.find(f => f.id === id);
-      const matches = !searchQuery ||
-        fuzzyScore(searchQuery, font.name) > 0 ||
-        fuzzyScore(searchQuery, font.id) > 0;
-      li.style.display = matches ? '' : 'none';
+    for (const { li, font } of entryMap.values()) {
+      li.hidden = !!searchQuery &&
+        fuzzyScore(searchQuery, font.name) <= 0 &&
+        fuzzyScore(searchQuery, font.id) <= 0;
     }
+    syncTabStops(pillEls(), selectedEl());
   }
 
   // DOM/list cleanup only — used by both true removal and re-upload rebuilds.
@@ -74,12 +77,18 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
 
   function removeFont(id) {
     removePill(id);
-    // custom- uploads live in muse:custom-fonts; user-added installed fonts in
-    // muse:found-fonts. Route to the right store so removal actually persists.
-    if (id.startsWith('custom-')) removeCustomFont(id);
-    else removeFoundFont(id);
+    // custom- uploads live in muse:custom-fonts, user-added installed fonts in
+    // muse:found-fonts. Both removers are no-ops for an absent id, so calling
+    // both also covers custom fonts stored before ids carried the prefix.
+    removeCustomFont(id);
+    removeFoundFont(id);
     removeFromCatalog('fonts', id);
-    if (getState().font === id && allFonts[0]) setState({ font: allFonts[0].id });
+    if (getState().font === id && allFonts[0]) {
+      const fallback = allFonts.some(f => f.id === DEFAULTS.font) ? DEFAULTS.font : allFonts[0].id;
+      setState({ font: fallback });
+    } else {
+      syncTabStops(pillEls(), selectedEl());
+    }
   }
 
   function createFontPill(font) {
@@ -87,29 +96,20 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     if (!allFonts.some(f => f.id === font.id)) allFonts.push(font);
 
     const li = document.createElement('li');
-    li.className = 'pill';
+    li.className = 'pill pill-font';
     li.setAttribute('role', 'option');
     li.setAttribute('aria-selected', font.id === getState().font ? 'true' : 'false');
     li.dataset.fontId = font.id;
-    li.tabIndex = 0;
-    li.style.display = 'flex';
-    li.style.flexDirection = 'column';
-    li.style.alignItems = 'flex-start';
 
     const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.justifyContent = 'space-between';
-    topRow.style.alignItems = 'center';
-    topRow.style.width = '100%';
+    topRow.className = 'pill-top';
 
     const name = document.createElement('span');
+    name.className = 'pill-name';
     name.textContent = font.name;
-    name.style.fontWeight = '600';
 
-    const badgeContainer = document.createElement('div');
-    badgeContainer.style.display = 'flex';
-    badgeContainer.style.alignItems = 'center';
-    badgeContainer.style.gap = '6px';
+    const badges = document.createElement('div');
+    badges.className = 'pill-badges';
 
     const isInstalled = isInstalledFont(font);
     const typeBadge = document.createElement('span');
@@ -117,98 +117,58 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
     typeBadge.textContent = isInstalled ? 'installed' : 'web';
 
     const statusBadge = document.createElement('span');
-    statusBadge.style.display = 'none';
+    statusBadge.hidden = true;
+    statusBadge.dataset.state = 'idle';
 
-    badgeContainer.append(statusBadge, typeBadge);
+    badges.append(statusBadge, typeBadge);
 
     // Anything the user added is removable: custom- uploads (muse:custom-fonts)
     // and fonts added via the Installed tab (muse:found-fonts, flagged userAdded).
     // Repo fonts and auto-detected system fonts are not.
+    let removeBtn = null;
     if (font.id.startsWith('custom-') || font.userAdded) {
-      badgeContainer.appendChild(createRemoveButton(
+      removeBtn = createRemoveButton(
         `Remove "${font.name}" from your fonts?`,
         `Remove ${font.name}`,
         () => removeFont(font.id),
-      ));
+      );
+      badges.appendChild(removeBtn);
     }
 
-    topRow.append(name, badgeContainer);
+    topRow.append(name, badges);
 
     const preview = document.createElement('div');
+    preview.className = 'pill-preview';
     preview.style.fontFamily = font.stack;
-    preview.style.fontSize = '1.1em';
-    preview.style.opacity = '0.7';
-    preview.style.marginTop = '4px';
-    preview.style.whiteSpace = 'nowrap';
-    preview.style.overflow = 'hidden';
-    preview.style.textOverflow = 'ellipsis';
-    preview.style.width = '100%';
     preview.textContent = font.name;
 
     li.append(topRow, preview);
     ul.appendChild(li);
-    entryMap.set(font.id, { li, statusBadge });
-    if (ul.isConnected) observer.observe(li);
+    const rec = { li, statusBadge, font };
+    entryMap.set(font.id, rec);
+    observer.observe(li);
 
-    const handleSelect = async () => {
+    const handleSelect = () => {
       setState({ font: font.id });
-
-      if (!isInstalled) {
-        statusBadge.style.display = 'inline-block';
-        statusBadge.className = 'spinner';
-        statusBadge.textContent = '';
-
-        const success = await loadWebFont(font);
-
-        statusBadge.className = success ? 'badge-installed' : 'badge-error';
-        statusBadge.textContent = success ? '✓' : 'could not load';
-      }
+      // Re-verify on every pick so a transient CDN failure doesn't pin an
+      // error badge for the session.
+      if (!isInstalled) verify(rec);
     };
 
     li.addEventListener('click', handleSelect);
-
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleSelect();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        nextVisiblePill(li)?.focus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        prevVisiblePill(li)?.focus();
-      }
+    bindPillKeys(li, {
+      onSelect: handleSelect,
+      onRemove: removeBtn ? () => removeBtn.click() : null,
     });
   }
 
-  const searchWrap = document.createElement('div');
-  searchWrap.className = 'sidebar-search-wrap';
-
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Search fonts…';
-  searchInput.className = 'sidebar-search';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.className = 'sidebar-search-clear';
-  clearBtn.setAttribute('aria-label', 'Clear search');
-  clearBtn.tabIndex = -1;
-  clearBtn.textContent = '×';
-  clearBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input'));
-    searchInput.focus();
+  const search = makeSearchBox({
+    placeholder: 'Search fonts…',
+    label: 'Search fonts',
+    onQuery: (q) => { searchQuery = q; applyFilter(); },
+    onArrowDown: () => firstVisiblePill(ul)?.focus(),
   });
-
-  searchWrap.append(searchInput, clearBtn);
-  container.appendChild(searchWrap);
-
-  searchInput.addEventListener('input', () => {
-    searchQuery = searchInput.value.trim();
-    searchWrap.classList.toggle('has-value', searchQuery.length > 0);
-    applyFilter();
-  });
-
+  container.appendChild(search.wrap);
   container.appendChild(ul);
 
   for (const font of allFonts) {
@@ -216,6 +176,7 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   }
 
   const addBtn = document.createElement('button');
+  addBtn.type = 'button';
   addBtn.className = 'sidebar-add-btn';
   addBtn.id = 'add-font-btn';
   const addIcon = document.createElement('span');
@@ -229,10 +190,17 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   addWrap.appendChild(addBtn);
   container.appendChild(addWrap);
 
+  let lastSelected = null;
   subscribe((state) => {
     for (const [id, { li }] of entryMap) {
       li.setAttribute('aria-selected', id === state.font ? 'true' : 'false');
     }
+    const sel = entryMap.get(state.font)?.li || null;
+    syncTabStops(pillEls(), sel);
+    // Only on a selection change: a size tweak must not yank a list the user
+    // has scrolled away from the selected pill.
+    if (sel && sel !== lastSelected) scrollIntoContainerView(container, sel);
+    lastSelected = sel;
   });
 
   function addCustomFontPill(font) {
@@ -244,20 +212,4 @@ export function mountFontsSidebar({ container, manifests, installedFonts }) {
   }
 
   return { addCustomFontPill };
-}
-
-// Small "×" used to delete a user-added pill (hover/focus-revealed on pointer
-// devices, always shown on touch — see .pill-remove in style.css).
-export function createRemoveButton(confirmMsg, ariaLabel, onRemove) {
-  const btn = document.createElement('button');
-  btn.className = 'pill-remove';
-  btn.textContent = '×';
-  btn.title = 'Remove';
-  btn.setAttribute('aria-label', ariaLabel);
-  btn.tabIndex = -1;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (confirm(confirmMsg)) onRemove();
-  });
-  return btn;
 }

@@ -1,10 +1,11 @@
 // muse/preview — preview block renderer with race-condition guard.
 //
-// Size-only fast path: the main.js subscriber detects when only `size` changed
-// (font/theme/lang/ligatures/italic unchanged) and calls updateFontSize() — a
-// pure CSS update — instead of re-invoking renderPreview() and re-tokenizing.
+// CSS-only fast path: the main.js subscriber detects when only `size` and/or
+// `ligatures` changed (font/theme/lang/italic unchanged) and calls
+// applyPreviewStyle() — a pure style update — instead of re-invoking
+// renderPreview() and re-tokenizing.
 
-import { highlight, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme } from './themes.js';
+import { highlight, ensureCustomTheme, ensureCommentStyleTheme, getKnownTheme, isDarkTheme } from './themes.js';
 import { loadWebFont } from './fonts.js';
 import { loadSample } from './languages.js';
 
@@ -16,12 +17,14 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   // declared shikiLang when present; fall back to the id for the common case.
   const shikiLang = langManifest?.shikiLang || lang;
 
-  applyFontStyles({ container, font, size, ligatures, italic });
+  applyFontStyles({ container, font, size, ligatures });
 
-  // Do not block the visible font switch on CDN font loading. Applying the
-  // font-family stack immediately lets installed fonts update instantly and lets
-  // browsers show fallback text until a web font finishes decoding.
-  const fontReady = loadWebFont(font);
+  // Start the web-font download without blocking the visible switch: the
+  // family is already applied, so installed fonts update instantly and the
+  // browser swaps a web font in by itself once it decodes. Nothing is
+  // re-applied afterwards — a callback that re-applied the render-time size
+  // used to clobber slider changes made while the font was still loading.
+  loadWebFont(font);
 
   // Load custom theme if needed (built-in themes are already in Shiki at bootstrap)
   if (builtinThemes && !builtinThemes.has(theme)) {
@@ -35,22 +38,21 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
     console.error(e);
   }
 
-  // Apply the theme's actual background color to the page chrome,
-  // and set light/dark mode based on the theme author's declared type.
-  // Runs after theme is loaded (ensureCommentStyleTheme guarantees that)
-  // but before highlighting.
+  // Resolve the page chrome (theme background + light/dark mode) now, but
+  // apply it only after the race guard below: a stale render must not repaint
+  // the chrome of a theme the user has already moved away from.
+  let chrome = null;
   try {
-    const themeObj = await getKnownTheme(theme);
-    document.documentElement.style.setProperty('--theme-bg', themeObj?.bg || '#1a1a2e');
-    document.documentElement.dataset.theme = themeObj?.type === 'light' ? 'light' : 'dark';
-  } catch { /* keep defaults */ }
+    const [themeObj, dark] = await Promise.all([getKnownTheme(theme), isDarkTheme(theme)]);
+    chrome = { bg: themeObj?.bg || '#1a1a2e', dark };
+  } catch { /* keep the current chrome */ }
 
   let code;
   try {
     code = await loadSample(langManifest);
   } catch (e) {
     console.error(e);
-    code = '// Sample unavailable';
+    code = `// Sample unavailable — could not load ${langManifest?.sample || 'the sample file'}`;
   }
 
   let html;
@@ -59,19 +61,19 @@ export async function renderPreview({ font, theme, lang, langManifest, size, lig
   } catch (e) {
     // Fallback: plain <pre> with banner — font still applies
     console.error(e);
-    html = `<div style="color:#ff8080;padding:8px">⚠ syntax highlighting unavailable</div><pre>${escapeHtml(code)}</pre>`;
+    html = `<div class="preview-error">⚠ syntax highlighting unavailable</div><pre>${escapeHtml(code)}</pre>`;
   }
 
   // Race-condition guard: bail if a newer render has started
   if (token !== renderToken) return;
 
-  container.innerHTML = html;
-  applyFontStyles({ container, font, size, ligatures, italic });
+  if (chrome) {
+    document.documentElement.style.setProperty('--theme-bg', chrome.bg);
+    document.documentElement.dataset.theme = chrome.dark ? 'dark' : 'light';
+  }
 
-  fontReady.then(() => {
-    if (token !== renderToken) return;
-    applyFontStyles({ container, font, size, ligatures, italic });
-  });
+  container.innerHTML = html;
+  applyFontStyles({ container, font, size, ligatures });
 }
 
 function previewTargets(container) {
@@ -84,24 +86,21 @@ function previewTargets(container) {
   ].filter(Boolean);
 }
 
-function applyFontStyles({ container, font, size, ligatures, italic }) {
+function applyFontStyles({ container, font, size, ligatures }) {
   if (!container || !font) return;
-
   for (const target of previewTargets(container)) {
     target.style.fontFamily = font.stack;
-    target.style.fontSize = size + 'px';
   }
-
-  container.classList.toggle('no-liga', !ligatures);
-  container.classList.toggle('italic-comments', italic);
+  applyPreviewStyle(container, { size, ligatures });
 }
 
-// Size-only fast path: update font-size on the rendered nodes, no re-highlight.
-export function updateFontSize(container, size) {
+// CSS-only fast path: size and ligatures need no re-highlight.
+export function applyPreviewStyle(container, { size, ligatures }) {
   if (!container) return;
   for (const target of previewTargets(container)) {
     target.style.fontSize = size + 'px';
   }
+  container.classList.toggle('no-liga', !ligatures);
 }
 
 function escapeHtml(s) {

@@ -1,8 +1,10 @@
-import { getState, setState, subscribe, removeFromCatalog } from '../state.js';
-import { getKnownTheme, ensureCustomTheme, isThemeLoaded } from '../themes.js';
-import { fuzzyScore, nextVisiblePill, prevVisiblePill } from './search.js';
-import { fetchJson } from '../util.js';
-import { createRemoveButton } from './sidebar-fonts.js';
+import { getState, setState, subscribe, removeFromCatalog, DEFAULTS } from '../state.js';
+import { getKnownTheme, ensureCustomTheme, isThemeLoaded, isDarkTheme } from '../themes.js';
+import { fuzzyScore } from './search.js';
+import {
+  createRemoveButton, makeSearchBox, syncTabStops, scrollIntoContainerView,
+  bindPillKeys, firstVisiblePill,
+} from './pill.js';
 import { removeCustomTheme } from './uploaders.js';
 
 async function extractSwatches(themeName) {
@@ -25,34 +27,24 @@ async function extractSwatches(themeName) {
   }
 }
 
-function isDarkTheme(theme) {
-  if (theme.type) return theme.type === 'dark';
-  // Luminance heuristic on editor.background; unknown/non-hex bg defaults to dark
-  // rather than the old false "LIGHT" (e.g. "transparent" or a named color).
-  const bg = theme.colors?.['editor.background'];
-  if (typeof bg !== 'string' || !/^#[0-9a-fA-F]{6}/.test(bg)) return true;
-  const r = parseInt(bg.slice(1, 3), 16);
-  const g = parseInt(bg.slice(3, 5), 16);
-  const b = parseInt(bg.slice(5, 7), 16);
-  return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
-}
-
 // State is captured per-mount in this closure (no module singleton).
-export async function mountThemesSidebar({ container, builtinThemes = null, customThemes = [] }) {
-  const builtinList = builtinThemes || await fetchJson('./data/themes/_builtin.json');
-
+// `themes` lists the ids that are always present (Shiki built-ins + repo
+// themes); custom pills arrive later through addCustomThemePill.
+export function mountThemesSidebar({ container, themes }) {
   const ul = document.createElement('ul');
   ul.setAttribute('role', 'listbox');
   ul.setAttribute('aria-label', 'Themes');
 
-  const pills = new Map();
+  const pills = new Map(); // id → li
+  const pillEls = () => [...pills.values()];
+  const selectedEl = () => pills.get(getState().theme) || null;
   let searchQuery = '';
 
   function applyFilter() {
     for (const [id, pill] of pills) {
-      const matches = !searchQuery || fuzzyScore(searchQuery, id) > 0;
-      pill.style.display = matches ? '' : 'none';
+      pill.hidden = !!searchQuery && fuzzyScore(searchQuery, id) <= 0;
     }
+    syncTabStops(pillEls(), selectedEl());
   }
 
   function removeTheme(id) {
@@ -61,8 +53,10 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     removeCustomTheme(id);
     removeFromCatalog('themes', id);
     if (getState().theme === id) {
-      const fallback = [...pills.keys()][0];
+      const fallback = pills.has(DEFAULTS.theme) ? DEFAULTS.theme : [...pills.keys()][0];
       if (fallback) setState({ theme: fallback });
+    } else {
+      syncTabStops(pillEls(), selectedEl());
     }
   }
 
@@ -75,10 +69,10 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     // Initial selected state matters for pills added after mount (restored
     // custom themes): the subscriber only re-runs on the next state change.
     li.setAttribute('aria-selected', id === getState().theme ? 'true' : 'false');
-    li.setAttribute('tabindex', '0');
     li.dataset.id = id;
 
     const nameSpan = document.createElement('span');
+    nameSpan.className = 'pill-name';
     nameSpan.textContent = id;
     li.appendChild(nameSpan);
 
@@ -92,6 +86,7 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
 
     const swatchStrip = document.createElement('div');
     swatchStrip.className = 'swatch-strip';
+    swatchStrip.setAttribute('aria-hidden', 'true');
     for (let i = 0; i < 6; i++) {
       const span = document.createElement('span');
       span.style.backgroundColor = 'transparent';
@@ -100,12 +95,14 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     pillMeta.appendChild(swatchStrip);
 
     // Custom uploads (custom- prefix, stored in muse:custom-themes) are removable.
+    let removeBtn = null;
     if (isCustom) {
-      pillMeta.appendChild(createRemoveButton(
+      removeBtn = createRemoveButton(
         `Remove custom theme "${id}"?`,
         `Remove ${id}`,
         () => removeTheme(id),
-      ));
+      );
+      pillMeta.appendChild(removeBtn);
     }
 
     li.appendChild(pillMeta);
@@ -113,31 +110,20 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     ul.appendChild(li);
     pills.set(id, li);
 
-    li.addEventListener('click', () => {
-      setState({ theme: id });
-    });
-
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setState({ theme: id });
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        nextVisiblePill(li)?.focus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        prevVisiblePill(li)?.focus();
-      }
+    const select = () => setState({ theme: id });
+    li.addEventListener('click', select);
+    bindPillKeys(li, {
+      onSelect: select,
+      onRemove: removeBtn ? () => removeBtn.click() : null,
     });
 
     // Load theme data asynchronously
     (async () => {
       try {
-        if (isCustom || !isThemeLoaded(id)) {
+        if (!isThemeLoaded(id)) {
           await ensureCustomTheme(id);
         }
-        const theme = await getKnownTheme(id);
-        const dark = isDarkTheme(theme);
+        const dark = await isDarkTheme(id);
         badge.textContent = dark ? 'DARK' : 'LIGHT';
 
         const swatches = await extractSwatches(id);
@@ -171,43 +157,21 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
     applyFilter();
   }
 
-  const searchWrap = document.createElement('div');
-  searchWrap.className = 'sidebar-search-wrap';
-
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Search themes…';
-  searchInput.className = 'sidebar-search';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.className = 'sidebar-search-clear';
-  clearBtn.setAttribute('aria-label', 'Clear search');
-  clearBtn.tabIndex = -1;
-  clearBtn.textContent = '×';
-  clearBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input'));
-    searchInput.focus();
+  const search = makeSearchBox({
+    placeholder: 'Search themes…',
+    label: 'Search themes',
+    onQuery: (q) => { searchQuery = q; applyFilter(); },
+    onArrowDown: () => firstVisiblePill(ul)?.focus(),
   });
-
-  searchWrap.append(searchInput, clearBtn);
-  container.appendChild(searchWrap);
-
-  searchInput.addEventListener('input', () => {
-    searchQuery = searchInput.value.trim();
-    searchWrap.classList.toggle('has-value', searchQuery.length > 0);
-    applyFilter();
-  });
-
-  const sortedBuiltins = [...builtinList].sort((a, b) => a.localeCompare(b));
-  for (const builtin of sortedBuiltins) {
-    createThemePill(builtin, false);
-  }
-  [...customThemes].sort((a, b) => a.localeCompare(b)).forEach(id => createThemePill(id, true));
-
+  container.appendChild(search.wrap);
   container.appendChild(ul);
 
+  for (const id of [...themes].sort((a, b) => a.localeCompare(b))) {
+    createThemePill(id, false);
+  }
+
   const addButton = document.createElement('button');
+  addButton.type = 'button';
   addButton.className = 'sidebar-add-btn';
   addButton.id = 'add-theme-btn';
   const addThemeIcon = document.createElement('span');
@@ -221,11 +185,15 @@ export async function mountThemesSidebar({ container, builtinThemes = null, cust
   addWrap.appendChild(addButton);
   container.appendChild(addWrap);
 
+  let lastSelected = null;
   subscribe((state) => {
     for (const [id, pill] of pills.entries()) {
-      const selected = state.theme === id;
-      pill.setAttribute('aria-selected', selected ? 'true' : 'false');
+      pill.setAttribute('aria-selected', state.theme === id ? 'true' : 'false');
     }
+    const sel = pills.get(state.theme) || null;
+    syncTabStops(pillEls(), sel);
+    if (sel && sel !== lastSelected) scrollIntoContainerView(container, sel);
+    lastSelected = sel;
   });
 
   return { addCustomThemePill };

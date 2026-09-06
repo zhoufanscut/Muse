@@ -2,6 +2,8 @@
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+let dialogSeq = 0;
+
 // Build a stroke-based inline SVG icon (no external resource; CSP-safe).
 export function svgIcon(paths, size = 24) {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -33,9 +35,14 @@ export function createDialog() {
   header.className = 'upload-dialog-header';
 
   const title = document.createElement('h2');
+  title.id = `muse-dialog-title-${++dialogSeq}`;
+  // Focusable (not tabbable) so a dialog can start keyboard focus at its title.
+  title.tabIndex = -1;
+  dialog.setAttribute('aria-labelledby', title.id);
   header.appendChild(title);
 
   const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
   closeBtn.className = 'upload-dialog-close';
   closeBtn.textContent = '×';
   closeBtn.setAttribute('aria-label', 'Close');
@@ -52,9 +59,24 @@ export function createDialog() {
   dialog.appendChild(body);
   dialog.appendChild(footer);
 
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) dialog.close();
+  // Backdrop click closes — but only when the press *started* on the backdrop.
+  // A drag that begins inside a textarea (selecting pasted JSON) and ends over
+  // the backdrop dispatches `click` to the common ancestor, the dialog itself,
+  // which used to discard the paste.
+  let pressOnBackdrop = false;
+  dialog.addEventListener('pointerdown', (e) => {
+    pressOnBackdrop = e.target === dialog;
   });
+  dialog.addEventListener('click', (e) => {
+    if (pressOnBackdrop && e.target === dialog) dialog.close();
+    pressOnBackdrop = false;
+  });
+
+  // A file dropped anywhere in the dialog but a drop zone (e.g. on the JSON
+  // textarea) must not navigate the tab to that file.
+  for (const type of ['dragover', 'drop']) {
+    dialog.addEventListener(type, (e) => e.preventDefault());
+  }
 
   return { dialog, title, body, footer };
 }

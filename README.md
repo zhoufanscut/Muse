@@ -10,13 +10,13 @@ No build step, no `npm install`, no backend — just HTML, a handful of ES modul
 
 - **Mix and match** — any font × theme × language combo, rendered instantly.
 - **Land on a surprise** — your first visit picks a random font and theme, so you start somewhere you didn't expect. Your choices stick after that.
-- **Use fonts you already have** — Muse checks for ~40 common coding fonts on your machine and lists the ones it finds, no download needed.
+- **Use fonts you already have** — Muse checks for ~50 common coding fonts on your machine and lists the ones it finds, no download needed.
 - **Add your own font** — paste a CSS URL or an `@font-face` snippet in the *Add Font* dialog. Saved locally, just for you.
 - **Add your own theme** — drop in any VSCode theme JSON. Also saved locally.
 - **Tweak the details** — size, ligatures, italic comments.
-- **Search the sidebars** — fuzzy filter the pills, arrow keys to move between them.
+- **Search the sidebars** — fuzzy filter the pills; arrow keys move between them, Delete removes one you added.
 - **Share a link** — the URL captures your exact setup; send it and someone else sees the same thing. (Built-in fonts and themes travel; ones you added locally stay on your device.)
-- **Export to VSCode** — the *Export* button hands you a ready-to-paste `settings.json` for the setup you landed on.
+- **Export to VSCode** — the *Export* button hands you a ready-to-paste `settings.json` for the setup you landed on, plus the theme wrapped as a tiny extension.
 
 ## Add your own (and maybe send a PR)
 

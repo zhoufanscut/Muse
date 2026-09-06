@@ -42,21 +42,3 @@ export function fuzzyScore(query, text) {
 
   return score;
 }
-
-export function nextVisiblePill(el) {
-  let next = el.nextElementSibling;
-  while (next) {
-    if (next.classList.contains('pill') && next.offsetParent !== null) return next;
-    next = next.nextElementSibling;
-  }
-  return null;
-}
-
-export function prevVisiblePill(el) {
-  let prev = el.previousElementSibling;
-  while (prev) {
-    if (prev.classList.contains('pill') && prev.offsetParent !== null) return prev;
-    prev = prev.previousElementSibling;
-  }
-  return null;
-}

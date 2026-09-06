@@ -9,6 +9,8 @@ on:
       - 'data/languages/**'
       - 'data/samples/**'
       - 'scripts/rebuild-index.mjs'
+      - 'src/theme-validate.mjs'
+      - '.github/workflows/rebuild-index.yml'
   pull_request:
     paths:
       - 'data/fonts/**'
@@ -16,6 +18,8 @@ on:
       - 'data/languages/**'
       - 'data/samples/**'
       - 'scripts/rebuild-index.mjs'
+      - 'src/theme-validate.mjs'
+      - '.github/workflows/rebuild-index.yml'
 
 permissions:
   contents: write

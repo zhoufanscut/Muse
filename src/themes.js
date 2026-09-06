@@ -1,9 +1,24 @@
-import { createHighlighter } from 'https://esm.sh/shiki@1.24.0';
+// muse/themes — the Shiki highlighter and every theme registered with it.
+
 import { fetchJson } from './util.js';
 
+const SHIKI_URL = 'https://esm.sh/shiki@1.24.0';
+
+// Start downloading Shiki immediately, but through a dynamic import so a CDN
+// failure rejects a promise the boot orchestrator can catch. A static import
+// would fail module linking before main.js ever ran, leaving the boot overlay
+// stuck on "Loading highlighter…" with nothing but a console error. The no-op
+// catch only stops the browser reporting an unhandled rejection; bootstrap()
+// still awaits (and surfaces) the real error.
+const shikiModule = import(SHIKI_URL);
+shikiModule.catch(() => {});
+
 let highlighterPromise = null;
-const loadedLangs = new Set();
-const loadedThemes = new Set();
+const langLoads = new Map();      // shikiLang → load promise (in flight or settled)
+const themeLoads = new Map();     // repo theme id → in-flight ensureCustomTheme promise
+const loadedThemes = new Set();   // ids + comment-style variant names registered with Shiki
+const rawTypes = new Map();       // repo/runtime id → the `type` the raw JSON declared (may be undefined)
+const variantGen = new Map();     // runtime id → number of re-uploads (see loadRuntimeTheme)
 
 const COMMENT_STYLE_SCOPES = [
   'comment',
@@ -16,39 +31,86 @@ const COMMENT_STYLE_SCOPES = [
 ];
 
 async function bootstrap(builtinThemes) {
-  const builtin = builtinThemes || await fetchJson('./data/themes/_builtin.json');
-  const h = await createHighlighter({ themes: builtin, langs: [] });
-  for (const name of builtin) loadedThemes.add(name);
+  const { createHighlighter } = await shikiModule;
+  const h = await createHighlighter({ themes: builtinThemes, langs: [] });
+  for (const name of builtinThemes) loadedThemes.add(name);
   return h;
 }
 
-// builtinThemes is passed by the boot orchestrator so _builtin.json is fetched
-// once; later no-arg callers reuse the cached promise.
+// The boot orchestrator passes the built-in theme list on the first call;
+// every later no-arg call reuses the cached promise.
 export function getHighlighter(builtinThemes) {
-  if (!highlighterPromise) highlighterPromise = bootstrap(builtinThemes);
+  if (!highlighterPromise) {
+    if (!Array.isArray(builtinThemes)) {
+      throw new Error('getHighlighter: the built-in theme list is required on the first call');
+    }
+    highlighterPromise = bootstrap(builtinThemes);
+  }
   return highlighterPromise;
 }
 
-export async function ensureLang(shikiLang) {
-  if (loadedLangs.has(shikiLang)) return;
-  const h = await getHighlighter();
-  await h.loadLanguage(shikiLang);
-  loadedLangs.add(shikiLang);
+// Loads are keyed by id so concurrent callers (the preview and a sidebar pill
+// asking for the same theme, two quick renders of a new language) share one
+// fetch + registration instead of doing it twice.
+export function ensureLang(shikiLang) {
+  if (!langLoads.has(shikiLang)) {
+    const p = (async () => {
+      const h = await getHighlighter();
+      await h.loadLanguage(shikiLang);
+    })();
+    p.catch(() => langLoads.delete(shikiLang));
+    langLoads.set(shikiLang, p);
+  }
+  return langLoads.get(shikiLang);
 }
 
-export async function ensureCustomTheme(id) {
-  if (loadedThemes.has(id)) return;
-  const raw = await fetchJson(`./data/themes/${id}.json`);
-  // CRITICAL: filename stem is canonical. Override the embedded "name" so URL
-  // state, localStorage, and Shiki all agree on the same id.
-  const theme = { ...raw, name: id };
+// Register a repo or runtime theme JSON with Shiki under its canonical id.
+async function registerTheme(id, raw) {
   const h = await getHighlighter();
-  await h.loadTheme(theme);
+  // CRITICAL: the filename stem / upload slug is canonical. Override the
+  // embedded "name" so URL state, localStorage, and Shiki all agree on the same
+  // id. Clone first: Shiki's normalizeTheme aliases tokenColors as `settings`
+  // and unshifts a global rule into it, which would corrupt the caller's
+  // persisted/exported object.
+  await h.loadTheme(structuredClone({ ...raw, name: id }));
+  rawTypes.set(id, raw.type);
   loadedThemes.add(id);
 }
 
+// Repo themes (data/themes/<id>.json), fetched on demand.
+export function ensureCustomTheme(id) {
+  if (loadedThemes.has(id)) return Promise.resolve();
+  if (!themeLoads.has(id)) {
+    const p = (async () => {
+      const raw = await fetchJson(`./data/themes/${id}.json`);
+      await registerTheme(id, raw);
+    })();
+    p.finally(() => themeLoads.delete(id)).catch(() => {});
+    themeLoads.set(id, p);
+  }
+  return themeLoads.get(id);
+}
+
+// Runtime (uploaded) themes: register, or replace on re-upload.
+export async function loadRuntimeTheme(id, raw) {
+  const replacing = loadedThemes.has(id);
+  await registerTheme(id, raw);
+  if (!replacing) return;
+  // Shiki caches the active theme by *name* (setTheme skips re-registration
+  // when the name is unchanged), so rebuilding a comment-style variant under
+  // its old name would keep tokenizing with the stale TextMate theme while the
+  // <pre> background came from the new one. Bump the generation so the next
+  // render builds variants under fresh names.
+  variantGen.set(id, (variantGen.get(id) || 0) + 1);
+}
+
+function variantName(id, italic) {
+  const gen = variantGen.get(id) || 0;
+  return `${id}__muse-comments-${italic ? 'italic' : 'normal'}${gen ? `-${gen}` : ''}`;
+}
+
 export async function ensureCommentStyleTheme(id, italic) {
-  const variant = `${id}__muse-comments-${italic ? 'italic' : 'normal'}`;
+  const variant = variantName(id, italic);
   if (loadedThemes.has(variant)) return variant;
 
   if (!loadedThemes.has(id)) {
@@ -97,17 +159,38 @@ export async function highlight(code, lang, theme) {
   return h.codeToHtml(code, { lang, theme });
 }
 
+// Shiki's normalized theme object; throws if `name` was never registered.
 export async function getKnownTheme(name) {
   const h = await getHighlighter();
   return h.getTheme(name);
 }
 
-export function markThemeLoaded(id) { loadedThemes.add(id); }
 export function isThemeLoaded(id) { return loadedThemes.has(id); }
 
-// Forget a theme's cached comment-style variants so the next render rebuilds
-// them from the (possibly re-uploaded) base theme.
-export function invalidateCommentStyleVariants(id) {
-  loadedThemes.delete(`${id}__muse-comments-italic`);
-  loadedThemes.delete(`${id}__muse-comments-normal`);
+// Perceived-luminance check on a hex color (#rgb, #rgba, #rrggbb, #rrggbbaa).
+// Anything unparsable counts as dark, the app's own chrome.
+export function isDarkColor(hex) {
+  if (typeof hex !== 'string') return true;
+  const m = /^#([0-9a-f]{3,8})$/i.exec(hex.trim());
+  if (!m) return true;
+  let h = m[1];
+  if (h.length === 3 || h.length === 4) h = h.slice(0, 3).split('').map(c => c + c).join('');
+  if (h.length !== 6 && h.length !== 8) return true;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+}
+
+// Whether a registered theme is dark. Shiki's normalizeTheme stamps
+// `type: "dark"` on any theme that omits it, so for repo/runtime JSON the
+// declared type is trusted only when the raw file actually declared one;
+// otherwise the editor background decides. Built-ins always declare a type.
+export async function isDarkTheme(id) {
+  const theme = await getKnownTheme(id);
+  if (!theme) return true;
+  if (!rawTypes.has(id)) return theme.type !== 'light';
+  const declared = rawTypes.get(id);
+  if (declared === 'light' || declared === 'dark') return declared === 'dark';
+  return isDarkColor(theme.bg);
 }

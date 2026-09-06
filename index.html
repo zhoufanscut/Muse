@@ -30,6 +30,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 24px;
+      text-align: center;
       background: rgba(0, 0, 0, 0.85);
       color: #ccc;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -37,17 +39,20 @@
       letter-spacing: 0.02em;
       pointer-events: none;
     }
+    #boot-overlay.is-error { color: #ff8080; }
   </style>
 </head>
 <body>
-  <div id="boot-overlay">Loading highlighter…</div>
+  <div id="boot-overlay" role="status">Loading highlighter…<noscript> Muse needs JavaScript to run.</noscript></div>
 
-  <aside class="sidebar-fonts" aria-label="Fonts"></aside>
+  <!-- DOM order is reading/Tab order: header, tabs, controls, preview, then the
+       two sidebars. The grid areas in style.css place them visually. -->
   <header><h1>Muse</h1><span class="header-quote">Style is the perfection of a point of view. — Richard Eberhart</span></header>
   <nav class="lang-tabs" role="tablist" aria-label="Language"></nav>
-  <main class="preview-pane" aria-label="Code preview"></main>
+  <div class="controls-bar" role="group" aria-label="Preview controls"></div>
+  <main id="preview" class="preview-pane" aria-label="Code preview"></main>
+  <aside class="sidebar-fonts" aria-label="Fonts"></aside>
   <aside class="sidebar-themes" aria-label="Themes"></aside>
-  <footer class="controls-bar"></footer>
 
   <script type="module" src="./src/main.js"></script>
 </body>

@@ -12,19 +12,24 @@ Muse is a **static, no-build-step web app** — plain HTML + vanilla ES modules 
 
 ```
 index.html  →  src/main.js (boot orchestrator)
-                  ├── state.js       — pub/sub store, localStorage + URL hash sync
-                  ├── themes.js      — Shiki highlighter (@1.24.0, esm.sh)
-                  ├── fonts.js       — CDN font loading, installed-font detection
-                  ├── languages.js   — manifest + sample loading, caching
-                  ├── preview.js     — render with race-condition guard
-                  ├── util.js        — fetch helpers (HTTP-error-checked JSON/text)
-                  ├── style.css      — all styles
+                  ├── state.js           — pub/sub store, localStorage + URL hash sync
+                  ├── themes.js          — Shiki highlighter (@1.24.0, esm.sh), theme registry
+                  ├── fonts.js           — CDN font loading, installed-font detection
+                  ├── languages.js       — manifest + sample loading, caching
+                  ├── preview.js         — render with race-condition guard
+                  ├── theme-validate.mjs — theme shape + hex-only color validation (browser AND Node)
+                  ├── keys.js            — the localStorage key names
+                  ├── util.js            — fetch helpers (HTTP-error-checked JSON/text)
+                  ├── style.css          — all styles
                   └── ui/
-                      ├── sidebar-fonts.js   — left sidebar pills
-                      ├── sidebar-themes.js  — right sidebar pills
-                      ├── controls.js        — size slider, ligatures, lang tabs
-                      ├── uploaders.js       — custom font/theme upload dialogs
-                      └── search.js          — fuzzy scoring + pill navigation
+                      ├── sidebar-fonts.js   — fonts sidebar pills
+                      ├── sidebar-themes.js  — themes sidebar pills
+                      ├── controls.js        — size slider, ligatures, italic, lang tabs, Export button
+                      ├── uploaders.js       — custom font/theme upload dialogs + runtime theme store
+                      ├── export.js          — "Use this setup in VS Code" dialog
+                      ├── dialog.js          — shared <dialog> chrome + inline SVG icons
+                      ├── pill.js            — shared pill helpers: remove "×", search box, roving tabindex, keys
+                      └── search.js          — fuzzy scoring
 
 data/
   ├── _index.json          — auto-generated catalog (CI, never edit manually)
@@ -37,6 +42,10 @@ data/
 
 All imports use relative paths with `./` prefix. All `fetch()` calls use `./` prefix (required for GitHub Pages project sites).
 
+`src/theme-validate.mjs` is the one module shared with Node (`scripts/rebuild-index.mjs` imports it). It uses the `.mjs` extension because there is no `package.json` to declare `"type": "module"`, and CI's Node 20 would otherwise parse it as CommonJS. Keep it free of DOM and Node APIs.
+
+The DOM order in `index.html` is header → language tabs → controls → preview → fonts sidebar → themes sidebar (the reading and Tab order); CSS grid areas place them visually. Don't reorder the markup to match the visual layout.
+
 **`_index.json` vs `_builtin.json`**: `_index.json` only lists **repo** fonts/themes/languages by id. Shiki built-in theme names live separately in `data/themes/_builtin.json` (a string array) and are NOT in `_index.json`. The sidebar merges both lists at runtime. When adding a repo theme, ensure the id doesn't collide with any name in `_builtin.json`.
 
 ## Local dev
@@ -44,7 +53,7 @@ All imports use relative paths with `./` prefix. All `fetch()` calls use `./` pr
 ```bash
 python3 -m http.server 8000        # serve on localhost:8000
 node scripts/rebuild-index.mjs     # regenerate data/_index.json after data changes
-node scripts/rebuild-index.mjs --check   # validate-only (no write)
+node scripts/rebuild-index.mjs --check   # validate-only (no write); prints a ✓ summary on success
 ```
 
 Node.js 18+ required (CI uses 20). The rebuild script uses only `node:fs`, zero dependencies.
@@ -63,7 +72,7 @@ Adding content is conflict-free by design — you never edit shared files:
 | Theme | 1 file | `data/themes/<id>.json` |
 | Language | 2 files | `data/languages/<id>.json` + `data/samples/<id>.txt` |
 
-**Filename stem = canonical id** — used in URL hash, localStorage, and Shiki theme registration. The `id` field inside the JSON **must** match the filename.
+**Filename stem = canonical id** — used in URL hash, localStorage, and Shiki theme registration. Font and language manifests carry an `id` field that **must** match the filename; theme JSON has no `id` (its embedded `name` is display-only). Ids are lowercase ASCII letters, digits, and hyphens (`rebuild-index.mjs --check` enforces this).
 
 For PR contribution checklists (screenshot requirements, sample quality bar, etc.), see `CONTRIBUTING.md`.
 
@@ -80,18 +89,22 @@ The filename stem is canonical. The theme's embedded `name` field is display-onl
 
 ### Font loading
 ```js
-// Use this — waits for font decoding:
-await document.fonts.load(`16px "${font.name}"`);
-
-// NOT this — fires when CSS arrives, not when font is ready:
-link.addEventListener('load', ...);
+// The readiness signal — waits for the font file to be decoded:
+await document.fonts.load(`16px 'Font Name'`);
 ```
+The `<link>` `load` event is only the *first* step (`ensureStylesheet` in `src/fonts.js` waits for it so the `@font-face` rules exist), never the readiness signal: it fires when the CSS arrives, not when the font is usable. Re-applying styles after the font loads is unnecessary (the browser swaps the face in itself) and was the source of a bug where the render-time size clobbered slider changes — don't add it back.
 
 ### State precedence
 ```
 URL hash > localStorage > hardcoded defaults
 ```
 On page load, hash overrides everything. When state changes, **both** `localStorage` and URL hash update simultaneously. `state.js` also listens for `hashchange`, so pasting a shared hash into an open tab applies live — unknown hash keys are ignored, invalid ids fall back to defaults. The app's own hash writes use `history.replaceState`, which never fires `hashchange` (no feedback loop).
+
+### Page chrome follows the render guard
+`renderPreview` in `src/preview.js` resolves the theme background / light-dark mode early but applies `--theme-bg` and `data-theme` only **after** the `renderToken` check, together with the HTML. Applying them before the guard let a stale render repaint the chrome of a theme the user had already left.
+
+### Re-uploaded themes need new variant names
+Shiki caches the active theme by name (`setTheme` is a no-op when the name is unchanged), so re-registering a comment-style variant under the same name keeps tokenizing with the old TextMate theme. `loadRuntimeTheme` in `src/themes.js` bumps a per-id generation that is baked into the variant name; never reuse a variant name after its base theme changed.
 
 ### `.nojekyll`
 The root `.nojekyll` file (empty) is **required** for GitHub Pages. Without it, Jekyll drops files starting with `_` (like `_index.json` and `_builtin.json`), and the app fails to boot.
@@ -108,13 +121,17 @@ Fonts/themes uploaded at runtime via the UI dialogs persist in `localStorage` **
 **Boot sequence matters:** runtime asset IDs are read from `localStorage` in `src/main.js` *before* `setCatalog()` is called. This ensures `setCatalog()` knows about runtime-only IDs and doesn't clobber state pointing to them during validation. Rearranging this order breaks runtime asset restoration on page reload.
 
 ### Shiki version
-Pinned to `https://esm.sh/shiki@1.24.0` in `src/themes.js`. Changing this requires verifying that all custom theme loading still works, the theme API hasn't changed, and all `shikiLang` values in language manifests are still valid.
+Pinned to `https://esm.sh/shiki@1.24.0` in `src/themes.js`, loaded through a **dynamic** `import()` that starts at module evaluation. Keep it dynamic: a static import that fails (CDN down) aborts module linking before `main.js` runs, so the boot overlay could never show "Failed to start". Changing the version requires verifying that custom theme loading still works, the theme API hasn't changed (`loadTheme`, `getTheme`, `setTheme` caching by name), and all `shikiLang` values in language manifests are still valid.
+
+Shiki's `normalizeTheme` mutates the object it is given (it aliases `tokenColors` as `settings` and unshifts a global rule) and stamps `type: "dark"` on themes that omit `type`. `src/themes.js` therefore clones before `loadTheme` and remembers the raw `type` so `isDarkTheme()` can fall back to background luminance for undeclared themes. Use `isDarkTheme(id)` — never read `.type` off a normalized theme.
 
 ### Sample path convention
 Language manifests store `sample` as a **relative path without `./` prefix** (e.g. `"sample": "data/samples/python.txt"`). The loader (`src/languages.js`) prepends `./` at fetch time. Never include `./` in the manifest's `sample` field — `rebuild-index.mjs --check` rejects anything that doesn't match `data/samples/<file>.txt`.
 
 ### Custom theme slug prefix
-Runtime-uploaded themes get slugs prefixed with `custom-` (see `slugify()` in `src/ui/uploaders.js`). This distinguishes runtime-only themes from repo themes and prevents accidental filename collisions. Repo themes never use this prefix.
+Runtime-uploaded themes get slugs prefixed with `custom-` (see `slugify()` in `src/ui/uploaders.js`). This distinguishes runtime-only themes from repo themes and prevents accidental filename collisions. Repo themes never use this prefix. Slugs keep Unicode letters/digits, and a name with none at all gets a short hash — no two uploads can collapse onto a bare `custom-` id.
+
+Uploaded theme JSON goes through `validateTheme()` (`src/theme-validate.mjs`) **before** registration, and a theme is persisted to `localStorage` only after Shiki accepted it. `readStoredCustomThemes()` re-validates on restore, so `main.js` puts an id in the catalog only when `restoreCustom` will actually register it.
 
 ### Custom font slug prefix
 Runtime-uploaded fonts (URL or `@font-face` via the dialog) also get `custom-`-prefixed ids — `slugify()` computes the id in `src/ui/uploaders.js` and `installFont` honors `spec.id`. This stops a name like "JetBrains Mono" from shadowing the repo `jetbrains-mono` manifest. System/"found" fonts keep their **real** id (no prefix) so they map to the actually-installed font. Repo fonts, themes, and languages never use this prefix — `rebuild-index.mjs --check` rejects committed `custom-*` files.
@@ -129,7 +146,7 @@ muse:custom-fonts   — array of user-uploaded font objects
 muse:custom-themes  — array of {id, theme} for user-uploaded VSCode themes
 muse:found-fonts    — array of fonts detected as installed on this device
 ```
-All values are JSON. Clearing a key or corrupting it triggers fallback to defaults — the app never crashes on bad localStorage.
+The names live in `src/keys.js`; import them rather than retyping the strings. All values are JSON. Clearing a key or corrupting it triggers fallback to defaults — the app never crashes on bad localStorage: `muse:state` is normalized on load (types checked, `size` clamped to 10–22), and the readers for the other keys drop malformed entries one at a time instead of aborting the whole restore.
 
 ## CI
 
@@ -138,7 +155,7 @@ Single workflow: `.github/workflows/rebuild-index.yml`
 - **On PR**: runs `node scripts/rebuild-index.mjs --check` (validation-only)
 - **On push to `main`**: validates + regenerates `data/_index.json` + auto-commits it
 
-The auto-commit triggers a GitHub Pages deploy. No manual deploy step.
+The workflow only runs when something under `data/`, the rebuild script, the shared validator, or the workflow itself changed (see its `paths` filter); a code-only push deploys as is. Pages deploys on every push to `main`, including the bot's auto-commit. No manual deploy step.
 
 ## What doesn't exist
 
@@ -171,5 +188,9 @@ const unsub = subscribe((state) => { /* render */ });
 Before `setCatalog()` is called during boot, `setState` does NOT validate against available assets. After boot, every `setState` validates: invalid font/theme/lang IDs trigger `console.error` and fall back to defaults.
 
 Because of that validation, runtime additions/removals must keep the catalog in sync via `extendCatalog('fonts'|'themes', id)` / `removeFromCatalog(...)` — `main.js` does this in its `onFontAdded`/`onThemeAdded` callbacks, the sidebars on pill removal. Selecting a freshly uploaded asset without extending the catalog bounces the selection back to defaults.
+
+Both callbacks take `{ fresh: true }` from the dialogs (an upload the user just made: persist a found font, select the asset) and nothing from `restoreCustom` (boot-time restore: never change the selection). A found font whose id is already shipped (repo or auto-detected) is only selected, never duplicated.
+
+Subscribers receive a **snapshot** (like `getState()`); `main.js` compares consecutive snapshots to take a CSS-only fast path for size/ligature changes when no full render is in flight.
 
 **First-visit randomization**: On the very first visit (no `localStorage` state AND no URL hash), `setCatalog()` picks a random font and theme from the catalog. This is how each new visitor sees a different landing combination. On subsequent visits, the stored or hash-driven selection wins.

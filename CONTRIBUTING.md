@@ -8,7 +8,7 @@ The nice part of the data layout: every contribution is a new file in `data/`. Y
 
 **Font** — add `data/fonts/<id>.json`. Check that the `cssUrl` actually loads (try it in a private window), that the `id` matches the filename, and that the font is something you're allowed to share (a `credits` link is nice).
 
-**Theme** — add `data/themes/<id>.json`, any valid VSCode theme JSON. A screenshot in the PR helps me see what it looks like. The filename id shouldn't collide with a Shiki built-in theme name.
+**Theme** — add `data/themes/<id>.json`, any valid VSCode theme JSON with hex colors only (Muse writes them into inline styles, so CI rejects anything else) and, ideally, a `"type": "light"` or `"dark"`. A screenshot in the PR helps me see what it looks like. The filename id shouldn't collide with a Shiki built-in theme name.
 
 **Language** — add `data/languages/<id>.json` plus `data/samples/<id>.txt`. Keep the sample a small, self-contained, real-looking program (~50–100 lines) that tokenizes cleanly, and make `shikiLang` a real Shiki language id.
 

@@ -4,6 +4,7 @@
 
 import { createDialog } from './dialog.js';
 import { isFontAvailable } from '../fonts.js';
+import { isDarkTheme } from '../themes.js';
 
 // Shiki's getTheme() decorates themes with runtime-only keys; drop them so the
 // downloaded JSON is a clean VS Code theme. `displayName` is Shiki's too — the
@@ -27,22 +28,24 @@ function buildSettingsSnippet(font, state, themeId) {
   return JSON.stringify(settings, null, 2);
 }
 
-function buildPackageJson(themeId, themeObj) {
-  const uiTheme = themeObj?.type === 'light' ? 'vs' : 'vs-dark';
+function buildPackageJson(themeId, dark) {
   const pkg = {
     name: `muse-${themeId}`,
     displayName: `${themeId} (Muse)`,
+    // Without a publisher VS Code registers the extension as
+    // "undefined_publisher.muse-…" and warns about it.
+    publisher: 'muse',
     version: '1.0.0',
     engines: { vscode: '^1.0.0' },
     categories: ['Themes'],
     contributes: {
-      themes: [{ label: themeId, uiTheme, path: `./${themeId}.json` }],
+      themes: [{ label: themeId, uiTheme: dark ? 'vs-dark' : 'vs', path: `./${themeId}.json` }],
     },
   };
   return JSON.stringify(pkg, null, 2);
 }
 
-function cleanTheme(themeId, raw) {
+function cleanTheme(themeId, raw, dark) {
   const out = {};
   for (const [k, v] of Object.entries(raw || {})) {
     if (DROP_KEYS.has(k)) continue;
@@ -57,6 +60,9 @@ function cleanTheme(themeId, raw) {
   // Output is serialized for download immediately; nested values are shared
   // read-only with the live theme object and must not be mutated.
   out.name = themeId; // keep name coherent with the filename + extension label
+  // A raw theme that never declared its kind would be treated as dark by every
+  // consumer; write down what Muse actually rendered it as.
+  if (out.type !== 'light' && out.type !== 'dark') out.type = dark ? 'dark' : 'light';
   return out;
 }
 
@@ -100,7 +106,7 @@ function setStatus(el, msg, kind) {
 }
 
 // Read-only code block with a Copy button pinned to the top-right.
-function makeCodeBlock(text) {
+function makeCodeBlock(text, label) {
   const wrap = document.createElement('div');
   wrap.className = 'export-code';
 
@@ -108,6 +114,7 @@ function makeCodeBlock(text) {
   copyBtn.type = 'button';
   copyBtn.className = 'export-copy-btn';
   copyBtn.textContent = 'Copy';
+  copyBtn.setAttribute('aria-label', `Copy ${label}`);
   copyBtn.addEventListener('click', async () => {
     const ok = await copyText(text);
     copyBtn.textContent = ok ? 'Copied ✓' : 'Copy failed';
@@ -176,7 +183,7 @@ function buildFontSection(font, state, themeId) {
   desc.textContent = 'Add these to your VS Code settings.json:';
   section.appendChild(desc);
 
-  section.appendChild(makeCodeBlock(buildSettingsSnippet(font, state, themeId)));
+  section.appendChild(makeCodeBlock(buildSettingsSnippet(font, state, themeId), 'settings'));
   section.appendChild(buildFontNote(font));
   return section;
 }
@@ -198,7 +205,7 @@ function buildSteps(themeId) {
   return ol;
 }
 
-function fillThemeSection(container, themeId, themeObj, status) {
+function fillThemeSection(container, themeId, themeObj, dark, status) {
   const dlBtn = document.createElement('button');
   dlBtn.type = 'button';
   dlBtn.className = 'btn-secondary export-download-btn';
@@ -214,7 +221,7 @@ function fillThemeSection(container, themeId, themeObj, status) {
   }
 
   dlBtn.addEventListener('click', () => {
-    downloadJson(`${themeId}.json`, cleanTheme(themeId, themeObj));
+    downloadJson(`${themeId}.json`, cleanTheme(themeId, themeObj, dark));
     setStatus(status, `Downloaded ${themeId}.json ✓`, 'success');
   });
   container.appendChild(dlBtn);
@@ -224,7 +231,7 @@ function fillThemeSection(container, themeId, themeObj, status) {
   desc.textContent = 'VS Code themes are extensions, so wrap it in a tiny one. Save this as package.json next to the theme:';
   container.appendChild(desc);
 
-  container.appendChild(makeCodeBlock(buildPackageJson(themeId, themeObj)));
+  container.appendChild(makeCodeBlock(buildPackageJson(themeId, dark), 'package.json'));
   container.appendChild(buildSteps(themeId));
 }
 
@@ -271,16 +278,20 @@ export function showExportDialog({ font, state, resolveThemeJson }) {
 
   document.body.appendChild(dialog);
   dialog.showModal();
+  // Start at the title so screen readers announce what opened and keyboard
+  // users read top-down, instead of landing on the "×" close button.
+  title.focus();
   dialog.addEventListener('close', () => dialog.remove());
 
   (async () => {
     let themeObj = null;
+    let dark = true;
     try {
-      themeObj = await resolveThemeJson(themeId);
+      [themeObj, dark] = await Promise.all([resolveThemeJson(themeId), isDarkTheme(themeId)]);
     } catch (e) {
       console.error(e);
     }
     themeBody.replaceChildren();
-    fillThemeSection(themeBody, themeId, themeObj, status);
+    fillThemeSection(themeBody, themeId, themeObj, dark, status);
   })();
 }

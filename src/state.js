@@ -1,19 +1,35 @@
 // muse/state — selection store with localStorage persistence, URL hash sync, and pub/sub
 
-const KEY = 'muse:state';
+import { STATE_KEY as KEY } from './keys.js';
 
-const DEFAULTS = {
+export const DEFAULTS = Object.freeze({
   font: 'jetbrains-mono',
   theme: 'one-dark-pro',
   lang: 'python',
   size: 14,
   ligatures: true,
   italic: true,
-};
+});
+
+// The slider's integer range; every size that reaches state is clamped to it.
+const SIZE_MIN = 10;
+const SIZE_MAX = 22;
 
 const subs = new Set();
 
 let catalog = null;
+
+// null for anything that isn't a usable size (size=foo, size=, true, {}).
+function clampSize(v) {
+  if (typeof v === 'string') {
+    if (v.trim() === '') return null;
+  } else if (typeof v !== 'number') {
+    return null;
+  }
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, n)));
+}
 
 function parseHash(hash) {
   if (!hash || hash === '#') return null;
@@ -21,13 +37,10 @@ function parseHash(hash) {
   const out = {};
   for (const [k, v] of p) {
     if (k === 'size') {
-      // Guard against a mangled/hand-edited hash (size=foo, size=, size=9999):
-      // ignore empty/non-numeric values; clamp + round the rest to the slider's
-      // integer 10–22 range so the stored size matches the slider's step.
-      const n = Number(v);
-      if (v.trim() !== '' && Number.isFinite(n)) {
-        out.size = Math.round(Math.min(22, Math.max(10, n)));
-      }
+      // Guard against a mangled/hand-edited hash: ignore empty/non-numeric
+      // values; clamp + round the rest to the slider's integer range.
+      const size = clampSize(v);
+      if (size != null) out.size = size;
     }
     else if (k === 'liga') out.ligatures = v === '1';
     else if (k === 'italic') out.italic = v === '1';
@@ -38,6 +51,23 @@ function parseHash(hash) {
   return out;
 }
 
+// Known keys with sane types only. Junk persisted by older versions of
+// muse:state (unknown keys, `size: "abc"`, `size: 9999`, `italic: "no"`) would
+// otherwise reach the slider and the preview, or be re-persisted forever.
+function normalize(s) {
+  const out = { ...DEFAULTS };
+  for (const k of ['font', 'theme', 'lang']) {
+    if (typeof s[k] === 'string' && s[k]) out[k] = s[k];
+  }
+  const size = clampSize(s.size);
+  if (size != null) out.size = size;
+  if (typeof s.ligatures === 'boolean') out.ligatures = s.ligatures;
+  if (typeof s.italic === 'boolean') out.italic = s.italic;
+  return out;
+}
+
+let hashRetryTimer = null;
+
 function writeHash(s) {
   const p = new URLSearchParams({
     font: s.font,
@@ -47,7 +77,23 @@ function writeHash(s) {
     liga: s.ligatures ? '1' : '0',
     italic: s.italic ? '1' : '0',
   });
-  history.replaceState(null, '', '#' + p.toString());
+  const next = '#' + p.toString();
+  if (location.hash === next) return;
+  try {
+    history.replaceState(null, '', next);
+  } catch (e) {
+    // Safari throws a SecurityError after 100 replaceState calls in 30 s (a
+    // long slider drag gets there). Never let that break the subscriber
+    // notification that follows; retry once the throttle window has passed so
+    // a copied URL isn't left stale.
+    console.error(e);
+    if (!hashRetryTimer) {
+      hashRetryTimer = setTimeout(() => {
+        hashRetryTimer = null;
+        writeHash(state);
+      }, 2000);
+    }
+  }
 }
 
 function load() {
@@ -55,12 +101,8 @@ function load() {
   try {
     stored = JSON.parse(localStorage.getItem(KEY) || 'null');
   } catch {}
-  const merged = { ...DEFAULTS, ...(stored || {}), ...(parseHash(location.hash) || {}) };
-  // Known keys only: junk persisted by pre-whitelist versions of muse:state
-  // would otherwise be re-persisted forever.
-  const out = {};
-  for (const k of Object.keys(DEFAULTS)) out[k] = merged[k];
-  return out;
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+  return normalize({ ...DEFAULTS, ...stored, ...(parseHash(location.hash) || {}) });
 }
 
 // Captured before any write so we can tell a genuine first visit (no saved
@@ -103,6 +145,13 @@ function schedulePersist() {
   persistTimer = setTimeout(persistNow, 200);
 }
 
+// Subscribers get a snapshot, like getState(): the live object is never handed
+// out, so no subscriber can mutate the store or observe a later patch early.
+function notify() {
+  const snapshot = { ...state };
+  for (const fn of subs) fn(snapshot);
+}
+
 export function setCatalog(c) {
   catalog = c;
   state = validateAgainstCatalog(state);
@@ -117,7 +166,7 @@ export function setCatalog(c) {
   }
 
   persistNow();
-  for (const fn of subs) fn(state);
+  notify();
 }
 
 // Runtime uploads/removals happen after boot; keep the catalog in sync so
@@ -138,17 +187,17 @@ export function getState() {
 }
 
 export function setState(patch) {
-  state = validateAgainstCatalog({ ...state, ...patch });
+  state = validateAgainstCatalog(normalize({ ...state, ...patch }));
   // Size fires rapidly during slider drags — debounce its persistence. Every
   // other change persists immediately so a copied URL hash is never stale.
   if (Object.keys(patch).length === 1 && 'size' in patch) schedulePersist();
   else persistNow();
-  for (const fn of subs) fn(state);
+  notify();
 }
 
 export function subscribe(fn) {
   subs.add(fn);
-  fn(state);
+  fn({ ...state });
   return () => subs.delete(fn);
 }
 

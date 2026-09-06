@@ -2,33 +2,43 @@ import { fetchJson, fetchText } from './util.js';
 
 const sampleCache = new Map();
 
-// Malformed JSON dropped silently with console.error — does NOT crash the caller.
+function isLanguageManifest(m) {
+  return !!m && typeof m === 'object'
+    && typeof m.id === 'string' && m.id
+    && typeof m.label === 'string' && m.label
+    && typeof m.shikiLang === 'string' && m.shikiLang
+    && typeof m.sample === 'string' && m.sample;
+}
+
+// Manifests are fetched in parallel. A missing/malformed one is dropped with a
+// console.error — it must never take the whole app down.
 export async function loadLanguageManifests(ids) {
+  const settled = await Promise.allSettled(
+    ids.map(id => fetchJson(`./data/languages/${id}.json`)),
+  );
   const results = [];
-  for (const id of ids) {
-    try {
-      const manifest = await fetchJson(`./data/languages/${id}.json`);
-      results.push(manifest);
-    } catch (e) {
-      console.error(e);
+  settled.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(r.reason);
+    } else if (!isLanguageManifest(r.value)) {
+      console.error(`muse: ignoring malformed manifest data/languages/${ids[i]}.json`);
+    } else {
+      results.push(r.value);
     }
-  }
+  });
   return results;
 }
 
 // Manifest's sample field stores "data/samples/python.txt" (no ./ prefix).
 // Prepend './' so the fetch works on GH Pages project sites.
-// Cache by manifest.id — don't re-fetch on tab re-activation.
+// Cache by manifest.id — don't re-fetch on tab re-activation. A failed fetch
+// throws (nothing is cached) so the preview can say what went wrong instead
+// of silently rendering an empty block.
 export async function loadSample(manifest) {
   if (sampleCache.has(manifest.id)) {
     return sampleCache.get(manifest.id);
   }
-  try {
-    const text = await fetchText('./' + manifest.sample);
-    sampleCache.set(manifest.id, text);
-    return text;
-  } catch (e) {
-    console.error(e);
-    return '';
-  }
+  const text = await fetchText('./' + manifest.sample);
+  sampleCache.set(manifest.id, text);
+  return text;
 }

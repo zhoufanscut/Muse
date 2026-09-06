@@ -31,6 +31,7 @@ pnpm-debug.log*
 .omc/
 .omo/
 .playwright-mcp
+.claude/agent-memory-local/
 
 # Caches and temporary files
 .cache/
